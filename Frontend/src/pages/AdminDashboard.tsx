@@ -14,6 +14,7 @@ import { motion } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import Logo from '../components/Logo';
+import Layout from '../components/Layout';
 import { useToast } from '../components/Toast';
 import ConfirmDialog from '../components/ConfirmDialog';
 import Skeleton from '../components/Skeleton';
@@ -787,65 +788,40 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
   const paginatedAssignments = filteredAssignments.slice((assignmentPage - 1) * 10, assignmentPage * 10);
   const assignmentTotalPages = Math.max(1, Math.ceil(filteredAssignments.length / 10));
 
+  const sidebarNav = (closeMenu: () => void) => (
+    <nav className="flex-1 p-4 space-y-2">
+      {[
+        { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+        { id: 'projects', label: 'Projects', icon: Building2, hidden: user.role === 'support_agent' },
+        { id: 'investors', label: 'Investors', icon: Users, hidden: user.role === 'support_agent' },
+        { id: 'queries', label: 'Investor Queries', icon: MessageCircle },
+        { id: 'admins', label: 'Admin Management', icon: Shield, hidden: user.role !== 'super_admin' },
+      ].filter(item => !item.hidden).map((item) => (
+        <button
+          key={item.id}
+          onClick={() => { setActiveView(item.id as any); closeMenu(); }}
+          className={cn(
+            "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium text-sm",
+            activeView === item.id
+              ? "bg-redhill-red text-white shadow-lg shadow-redhill-red/20"
+              : "text-gray-400 hover:text-white hover:bg-white/5"
+          )}
+        >
+          <item.icon className="w-5 h-5" />
+          <span className="flex-1 text-left">{item.label}</span>
+          {item.id === 'queries' && unansweredCount > 0 && (
+            <span className="min-w-[20px] h-5 px-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse">
+              {unansweredCount}
+            </span>
+          )}
+        </button>
+      ))}
+    </nav>
+  );
+
   return (
-    <div className="min-h-screen bg-redhill-dark flex text-gray-100">
-      {/* Sidebar */}
-      <aside className="w-64 bg-[#171A21] border-r border-white/[0.05] text-white flex flex-col sticky top-0 h-screen">
-        <div className="p-6 border-b border-white/[0.05]">
-          <Logo light />
-        </div>
-
-        <nav className="flex-1 p-4 space-y-2">
-          {[
-            { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-            { id: 'projects', label: 'Projects', icon: Building2, hidden: user.role === 'support_agent' },
-            { id: 'investors', label: 'Investors', icon: Users, hidden: user.role === 'support_agent' },
-            { id: 'queries', label: 'Investor Queries', icon: MessageCircle },
-            { id: 'admins', label: 'Admin Management', icon: Shield, hidden: user.role !== 'super_admin' },
-          ].filter(item => !item.hidden).map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveView(item.id as any)}
-              className={cn(
-                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium text-sm",
-                activeView === item.id
-                  ? "bg-redhill-red text-white shadow-lg shadow-redhill-red/20"
-                  : "text-gray-400 hover:text-white hover:bg-white/5"
-              )}
-            >
-              <item.icon className="w-5 h-5" />
-              <span className="flex-1 text-left">{item.label}</span>
-              {item.id === 'queries' && unansweredCount > 0 && (
-                <span className="min-w-[20px] h-5 px-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse">
-                  {unansweredCount}
-                </span>
-              )}
-            </button>
-          ))}
-        </nav>
-
-        <div className="p-4 border-t border-white/10">
-          <div className="flex items-center gap-3 px-4 py-3 mb-4">
-            <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center text-xs font-bold">
-              {user.name.charAt(0)}
-            </div>
-            <div className="overflow-hidden">
-              <p className="text-sm font-bold truncate">{user.name}</p>
-              <p className="text-[10px] text-gray-500 uppercase font-bold">Administrator</p>
-            </div>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:text-redhill-red hover:bg-red-500/5 transition-all text-sm font-medium"
-          >
-            <LogOut className="w-5 h-5" />
-            Logout
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 p-10 overflow-auto">
+    <Layout user={user} onLogout={handleLogout} sidebarContent={sidebarNav}>
+      <div className="p-4 sm:p-6 lg:p-10 overflow-auto">
         {activeView === 'overview' && (
           <div className="space-y-8">
             <div className="flex justify-between items-end">
@@ -1130,7 +1106,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
               />
             ) : (
             <div className="bg-redhill-gray rounded-2xl border border-white/[0.06] shadow-lg overflow-hidden">
-              <div className="max-h-[500px] overflow-y-auto">
+              <div className="max-h-[500px] overflow-auto">
               <table className="w-full text-left">
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-[#252A35] border-b border-white/[0.06]">
@@ -2127,33 +2103,35 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
           </div>
 
           <div className="bg-redhill-gray border border-white/[0.06] rounded-2xl overflow-hidden">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-black/20 border-b border-white/[0.06]">
-                  <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Name</th>
-                  <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Email</th>
-                  <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Role</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.05]">
-                {adminsList.map((a: any) => (
-                  <tr key={a.id} className="hover:bg-white/[0.02]">
-                    <td className="px-6 py-4 font-bold text-white">{a.name}</td>
-                    <td className="px-6 py-4 text-gray-400">{a.email}</td>
-                    <td className="px-6 py-4">
-                      <span className={cn(
-                        "px-3 py-1 rounded-full text-xs font-bold tracking-wider",
-                        a.role === 'super_admin' ? "bg-amber-500/20 text-amber-500" :
-                        a.role === 'site_manager' ? "bg-emerald-500/20 text-emerald-500" :
-                        "bg-blue-500/20 text-blue-500"
-                      )}>
-                        {a.role.replace('_', ' ').toUpperCase()}
-                      </span>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-black/20 border-b border-white/[0.06]">
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Name</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Email</th>
+                    <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Role</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-white/[0.05]">
+                  {adminsList.map((a: any) => (
+                    <tr key={a.id} className="hover:bg-white/[0.02]">
+                      <td className="px-6 py-4 font-bold text-white">{a.name}</td>
+                      <td className="px-6 py-4 text-gray-400">{a.email}</td>
+                      <td className="px-6 py-4">
+                        <span className={cn(
+                          "px-3 py-1 rounded-full text-xs font-bold tracking-wider",
+                          a.role === 'super_admin' ? "bg-amber-500/20 text-amber-500" :
+                          a.role === 'site_manager' ? "bg-emerald-500/20 text-emerald-500" :
+                          "bg-blue-500/20 text-blue-500"
+                        )}>
+                          {a.role.replace('_', ' ').toUpperCase()}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -2278,6 +2256,6 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
         onConfirm={confirmDialog.onConfirm}
         onCancel={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
       />
-    </div>
+    </Layout>
   );
 }

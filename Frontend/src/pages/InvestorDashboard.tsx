@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
-import Logo from '../components/Logo';
+import Layout from '../components/Layout';
 
 interface InvestorDashboardProps {
   user: User;
@@ -123,29 +123,7 @@ export default function InvestorDashboard({ user, onLogout }: InvestorDashboardP
   };
 
   return (
-    <div className="min-h-screen bg-redhill-dark">
-      {/* Header */}
-      <header className="bg-redhill-gray/80 backdrop-blur-xl border-b border-white/5 sticky top-0 z-30">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Logo light />
-          </div>
-          
-          <div className="flex items-center gap-6">
-            <div className="text-right hidden sm:block">
-              <p className="text-sm font-bold text-white">{user.name}</p>
-              <p className="text-xs text-gray-500 font-medium">Investor Account</p>
-            </div>
-            <button 
-              onClick={onLogout}
-              className="p-2.5 text-gray-500 hover:text-redhill-red hover:bg-white/5 rounded-xl transition-all"
-              title="Logout"
-            >
-              <LogOut className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-      </header>
+    <Layout user={user} onLogout={onLogout}>
 
       {/* Hero Section */}
       <div className="relative overflow-hidden">
@@ -576,6 +554,6 @@ export default function InvestorDashboard({ user, onLogout }: InvestorDashboardP
         )}
       </div>
       </div>
-    </div>
+    </Layout>
   );
 }

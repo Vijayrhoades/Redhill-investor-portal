@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Logo from '../components/Logo';
+import Layout from '../components/Layout';
 import Skeleton from '../components/Skeleton';
 import StatusChip from '../components/StatusChip';
 import { formatCurrency, formatDate } from '../utils/formatters';
@@ -99,8 +99,8 @@ export default function ProjectDetail({ user, onLogout }: ProjectDetailProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-redhill-dark pb-20">
-        <header className="bg-redhill-gray/80 backdrop-blur-xl border-b border-white/[0.05] sticky top-0 z-30 h-20" />
+      <Layout user={user} onLogout={onLogout}>
+        <div className="pb-20">
         <div className="relative py-16">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <Skeleton type="text" className="w-1/3 mb-4" />
@@ -115,7 +115,7 @@ export default function ProjectDetail({ user, onLogout }: ProjectDetailProps) {
             </div>
           </div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
@@ -151,43 +151,25 @@ export default function ProjectDetail({ user, onLogout }: ProjectDetailProps) {
   };
 
   return (
-    <div className="min-h-screen bg-redhill-dark text-gray-100 pb-20">
-      {/* Header */}
-      <header className="bg-redhill-gray/80 backdrop-blur-xl border-b border-white/[0.05] sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Logo light={true} />
-            <div className="h-8 w-[1px] bg-white/[0.08] mx-2 hidden sm:block" />
-            <Link 
-              to={user.role === 'admin' ? '/admin' : '/dashboard'} 
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-sm font-medium transition-all border border-white/5 cursor-pointer"
-            >
-              <ChevronLeft className="w-4 h-4 text-redhill-red" />
-              <span>Back to Dashboard</span>
-            </Link>
-            <div className="hidden md:flex items-center gap-2 text-sm">
-              <ChevronRight className="w-4 h-4 text-gray-600" />
-              <span className="text-white font-medium truncate max-w-[200px]">{project.name}</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="text-right hidden sm:block">
-              <p className="text-sm font-bold text-white">{user.name}</p>
-              <p className="text-xs text-gray-500 font-medium">Investor Account</p>
-            </div>
-            <button
-              onClick={onLogout}
-              className="p-2.5 text-gray-400 hover:text-redhill-red hover:bg-white/5 rounded-xl transition-all cursor-pointer"
-              title="Logout"
-            >
-              <LogOut className="w-5 h-5" />
-            </button>
-          </div>
+    <Layout user={user} onLogout={onLogout}>
+      <div className="text-gray-100 pb-20">
+        
+      {/* Navigation */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+        <div className="flex items-center gap-2 text-sm text-gray-400">
+          <Link 
+            to={['admin', 'super_admin', 'site_manager', 'support_agent'].includes(user.role) ? '/admin' : '/dashboard'} 
+            className="hover:text-white transition-colors flex items-center gap-1"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Back to Dashboard
+          </Link>
+          <ChevronRight className="w-4 h-4" />
+          <span className="text-white font-medium truncate max-w-[200px] sm:max-w-xs">{project.name}</span>
         </div>
-      </header>
+      </div>
 
-      {/* Top Section: Hero & Stats */}
+      {/* Hero Header */}
       <div className="relative py-16 overflow-hidden">
         <div className="absolute inset-0 z-0">
           <img
@@ -798,7 +780,8 @@ export default function ProjectDetail({ user, onLogout }: ProjectDetailProps) {
           </motion.button>
         )}
       </AnimatePresence>
-    </div>
+      </div>
+    </Layout>
   );
 }
 
