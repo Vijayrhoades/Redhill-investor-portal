@@ -5,9 +5,12 @@ import { Link } from 'react-router-dom';
 import {
   LogOut, MapPin, TrendingUp, ChevronRight,
   IndianRupee, Maximize, BarChart3, Wallet, LayoutDashboard, Calendar,
-  Sparkles, Building2, Phone, X
+  Sparkles, Building2, Phone, X, Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 import Logo from '../components/Logo';
 
 interface InvestorDashboardProps {
@@ -58,6 +61,67 @@ export default function InvestorDashboard({ user, onLogout }: InvestorDashboardP
 
   const hasAds = newProjects.length > 0 && showAdSidebar;
 
+  const chartData = projects.map(p => ({
+    name: p.name,
+    Investment: p.investment_amount || 0,
+    Value: (p.allotted_sqft || 0) * (p.market_price_per_sqft || 0)
+  }));
+
+  const downloadCSV = () => {
+    if (projects.length === 0) return;
+
+    const headers = ['Project Name', 'Location', 'Investment Date', 'Investment Amount (INR)', 'Allotted Area (sqft)', 'Buy Rate (INR/sqft)', 'Current Market Rate (INR/sqft)', 'Current Market Value (INR)'];
+    
+    const rows = projects.map(p => [
+      p.name,
+      p.location,
+      p.investment_date ? formatDate(p.investment_date) : 'N/A',
+      p.investment_amount || 0,
+      p.allotted_sqft || 0,
+      p.price_at_investment || 0,
+      p.market_price_per_sqft || 0,
+      (p.allotted_sqft || 0) * (p.market_price_per_sqft || 0)
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute('download', `redhill_portfolio_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const downloadPDF = async () => {
+    if (projects.length === 0) return;
+    
+    const element = document.getElementById('portfolio-report');
+    if (!element) return;
+
+    try {
+      const canvas = await html2canvas(element, { 
+        scale: 2, 
+        backgroundColor: '#0a0a0f', // Match redhill-dark
+        useCORS: true 
+      });
+      
+      const imgData = canvas.toDataURL('image/jpeg', 1.0);
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`redhill_portfolio_${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (err) {
+      console.error('Error generating PDF', err);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-redhill-dark">
       {/* Header */}
@@ -103,13 +167,34 @@ export default function InvestorDashboard({ user, onLogout }: InvestorDashboardP
               })()}
               <span className="bg-gradient-to-r from-redhill-red to-amber-500 bg-clip-text text-transparent">{user.name.split(' ')[0]}</span>
             </h1>
-            <p className="text-gray-500 text-lg max-w-xl">Track your infrastructure investments, property values, and project progress in real-time.</p>
+            <p className="text-gray-500 text-lg max-w-xl mb-6">Track your infrastructure investments, property values, and project progress in real-time.</p>
+            
+            <div className="flex items-center gap-4 mb-6">
+              <button 
+                onClick={downloadCSV}
+                disabled={projects.length === 0}
+                className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white px-5 py-2.5 rounded-xl border border-white/10 transition-all font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Download className="w-4 h-4 text-redhill-red" />
+                Download CSV
+              </button>
+              
+              <button 
+                onClick={downloadPDF}
+                disabled={projects.length === 0}
+                className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white px-5 py-2.5 rounded-xl border border-white/10 transition-all font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Download className="w-4 h-4 text-redhill-red" />
+                Download PDF
+              </button>
+            </div>
           </motion.div>
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="relative max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 -mt-2 pb-4">
+      <div id="portfolio-report" className="pb-8">
+        {/* Stats Grid */}
+        <div className="relative max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 -mt-2 pb-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { label: 'Total Investment', value: formatCurrency(totalInvestment), icon: Wallet, gradient: 'from-redhill-red/20 to-rose-600/10', iconBg: 'bg-redhill-red/20', iconColor: 'text-redhill-red', border: 'border-redhill-red/10', delay: 0 },
@@ -150,6 +235,51 @@ export default function InvestorDashboard({ user, onLogout }: InvestorDashboardP
                 (+{((totalMarketValue - totalInvestment) / totalInvestment * 100).toFixed(1)}%)
               </span>
             </p>
+          </motion.div>
+        )}
+
+        {/* ROI Chart Section */}
+        {projects.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6, duration: 0.5 }}
+            className="mt-8 bg-[#121217]/90 backdrop-blur-md rounded-2xl border border-white/5 p-6 shadow-lg"
+          >
+            <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-emerald-400" />
+              Investment Growth
+            </h3>
+            <div className="h-[300px] w-full">
+              <div className="overflow-x-auto w-full">
+                <BarChart width={900} height={300} data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                  <XAxis 
+                    dataKey="name" 
+                    stroke="#ffffff40" 
+                    fontSize={12} 
+                    tickLine={false} 
+                    axisLine={false} 
+                  />
+                  <YAxis 
+                    stroke="#ffffff40" 
+                    fontSize={12} 
+                    tickLine={false} 
+                    axisLine={false}
+                    tickFormatter={(value) => `₹${(value / 10000000).toFixed(1)}Cr`}
+                  />
+                  <Tooltip
+                    cursor={{ fill: '#ffffff05' }}
+                    contentStyle={{ backgroundColor: '#1f2029', border: '1px solid #ffffff10', borderRadius: '12px', color: '#fff' }}
+                    itemStyle={{ color: '#fff' }}
+                    formatter={(value: number) => formatCurrency(value)}
+                  />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', color: '#aaa' }} />
+                  <Bar dataKey="Investment" fill="#e11d48" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="Value" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                </BarChart>
+              </div>
+            </div>
           </motion.div>
         )}
       </div>
@@ -396,13 +526,7 @@ export default function InvestorDashboard({ user, onLogout }: InvestorDashboardP
 
                   {/* Details */}
                   <div className="p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Building2 className="w-3.5 h-3.5 text-amber-400" />
-                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Project Value</span>
-                      </div>
-                      <span className="text-sm font-bold text-white">{project.total_value || 'TBA'}</span>
-                    </div>
+
 
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Status</span>
@@ -450,6 +574,7 @@ export default function InvestorDashboard({ user, onLogout }: InvestorDashboardP
             </div>
           </motion.aside>
         )}
+      </div>
       </div>
     </div>
   );

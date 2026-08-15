@@ -3,6 +3,27 @@ import bcrypt from 'bcryptjs';
 import multer from 'multer';
 import db from '../db.js';
 import { AuthRequest } from '../middlewares/auth.middleware.js';
+import { sendEmail } from '../services/email.service.js';
+
+// Manage Admins
+export const getAdmins = (req: AuthRequest, res: Response) => {
+  if (req.user?.role !== 'super_admin') return res.status(403).json({ error: 'Super Admin required' });
+  const admins = db.prepare('SELECT id, email, name, role FROM users WHERE role IN ("super_admin", "site_manager", "support_agent")').all();
+  res.json(admins);
+};
+
+export const createAdmin = (req: AuthRequest, res: Response) => {
+  if (req.user?.role !== 'super_admin') return res.status(403).json({ error: 'Super Admin required' });
+  const { email, password, name, role } = req.body;
+  if (!['super_admin', 'site_manager', 'support_agent'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
+  const hashedPassword = bcrypt.hashSync(password, 10);
+  try {
+    const result = db.prepare('INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)').run(email, hashedPassword, name, role);
+    res.json({ id: result.lastInsertRowid, email, name, role });
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
+};
 
 // Manage Investors
 export const getInvestors = (_req: AuthRequest, res: Response) => {
@@ -106,6 +127,21 @@ export const createMilestone = (req: AuthRequest, res: Response) => {
   const result = db.prepare('INSERT INTO milestones (project_id, category, name, status, start_date, expected_completion, actual_completion, completion_percentage, doc_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
     project_id, category, name, status, start_date, expected_completion, actual_completion, completion_percentage, doc_url
   );
+  
+  if (status === 'completed') {
+    const project = db.prepare('SELECT name FROM projects WHERE id = ?').get(project_id) as any;
+    const investors = db.prepare(`SELECT u.email, u.name FROM users u JOIN investor_projects ip ON ip.user_id = u.id WHERE ip.project_id = ?`).all(project_id) as any[];
+    
+    if (project && investors.length > 0) {
+      const emails = investors.map(i => i.email);
+      sendEmail({
+        to: emails,
+        subject: `Milestone Completed: ${project.name}`,
+        html: `<h2>Redhill Infra Updates</h2><p>Good news! The milestone <strong>${name}</strong> for ${project.name} has been marked as completed.</p>`
+      }).catch(console.error);
+    }
+  }
+
   res.json({ id: result.lastInsertRowid });
 };
 
@@ -123,6 +159,19 @@ export const createUpdate = (req: AuthRequest, res: Response) => {
   const result = db.prepare('INSERT INTO progress_updates (project_id, type, url, caption, date, milestone_id) VALUES (?, ?, ?, ?, ?, ?)').run(
     project_id, type, url, caption, date, milestone_id
   );
+
+  const project = db.prepare('SELECT name FROM projects WHERE id = ?').get(project_id) as any;
+  const investors = db.prepare(`SELECT u.email, u.name FROM users u JOIN investor_projects ip ON ip.user_id = u.id WHERE ip.project_id = ?`).all(project_id) as any[];
+  
+  if (project && investors.length > 0) {
+    const emails = investors.map(i => i.email);
+    sendEmail({
+      to: emails,
+      subject: `New Media Update: ${project.name}`,
+      html: `<h2>Redhill Infra Updates</h2><p>A new ${type} update has been added to ${project.name}.</p><p><strong>Caption:</strong> ${caption}</p><p>Log in to your portal to view it.</p>`
+    }).catch(console.error);
+  }
+
   res.json({ id: result.lastInsertRowid });
 };
 
@@ -133,4 +182,36 @@ export const uploadFile = (req: AuthRequest, res: Response) => {
   }
   const fileUrl = `/uploads/${req.file.filename}`;
   res.json({ url: fileUrl, filename: req.file.originalname, mimetype: req.file.mimetype });
+};
+
+// Analytics
+export const getAnalytics = (_req: AuthRequest, res: Response) => {
+  try {
+    const totalFunds = db.prepare('SELECT SUM(investment_amount) as total FROM investor_projects').get() as any;
+    const totalSqft = db.prepare('SELECT SUM(allotted_sqft) as total FROM investor_projects').get() as any;
+    const activeProjects = db.prepare('SELECT COUNT(*) as count FROM projects WHERE status IN ("active", "in_progress")').get() as any;
+
+    res.json({
+      totalFundsRaised: totalFunds?.total || 0,
+      totalAllottedSqft: totalSqft?.total || 0,
+      activeProjectsCount: activeProjects?.count || 0
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+};
+
+// Payments
+export const getPayments = (req: AuthRequest, res: Response) => {
+  const { projectId, userId } = req.params;
+  const payments = db.prepare('SELECT * FROM payments WHERE project_id = ? AND user_id = ? ORDER BY date DESC').all(projectId, userId);
+  res.json(payments);
+};
+
+export const addPayment = (req: AuthRequest, res: Response) => {
+  const { project_id, user_id, amount, date, type, status, description, file_url } = req.body;
+  const result = db.prepare('INSERT INTO payments (project_id, user_id, amount, date, type, status, description, file_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
+    project_id, user_id, amount, date, type, status, description, file_url
+  );
+  res.json({ id: result.lastInsertRowid });
 };

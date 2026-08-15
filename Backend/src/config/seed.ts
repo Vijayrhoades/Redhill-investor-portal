@@ -2,11 +2,11 @@ import db from '../db.js';
 import bcrypt from 'bcryptjs';
 
 export const seedData = () => {
-  const admin = db.prepare('SELECT * FROM users WHERE role = ?').get('admin');
+  const admin = db.prepare('SELECT * FROM users WHERE role = ?').get('super_admin');
   if (!admin) {
     const hashedPassword = bcrypt.hashSync('admin123', 10);
     db.prepare('INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)').run(
-      'admin@redhillinfra.com', hashedPassword, 'Redhill Admin', 'admin'
+      'admin@redhillinfra.com', hashedPassword, 'Redhill Admin', 'super_admin'
     );
   }
 

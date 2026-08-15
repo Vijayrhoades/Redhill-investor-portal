@@ -2,6 +2,8 @@ import { Response } from 'express';
 import db from '../db.js';
 import { AuthRequest } from '../middlewares/auth.middleware.js';
 
+import { sendEmail } from '../services/email.service.js';
+
 export const sendQuery = (req: AuthRequest, res: Response) => {
   if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
@@ -11,6 +13,31 @@ export const sendQuery = (req: AuthRequest, res: Response) => {
   const result = db.prepare('INSERT INTO queries (user_id, project_id, message, sender_role) VALUES (?, ?, ?, ?)').run(
     targetUserId, project_id, message, req.user.role
   );
+
+  // Send email notifications
+  const project = db.prepare('SELECT name FROM projects WHERE id = ?').get(project_id) as any;
+  if (project) {
+    if (req.user.role === 'admin') {
+      const investor = db.prepare('SELECT email, name FROM users WHERE id = ?').get(targetUserId) as any;
+      if (investor) {
+        sendEmail({
+          to: investor.email,
+          subject: `New Reply to Your Query: ${project.name}`,
+          html: `<h2>Redhill Infra</h2><p>Hello ${investor.name},</p><p>An administrator has replied to your query regarding <strong>${project.name}</strong>.</p><p><strong>Reply:</strong> ${message}</p><p>Please log in to your portal to respond.</p>`
+        }).catch(console.error);
+      }
+    } else {
+      const admins = db.prepare('SELECT email FROM users WHERE role = ?').all('admin') as any[];
+      if (admins.length > 0) {
+        sendEmail({
+          to: admins.map(a => a.email),
+          subject: `New Investor Query: ${project.name}`,
+          html: `<h2>Redhill Infra Admin Alert</h2><p>A new query has been posted by an investor for <strong>${project.name}</strong>.</p><p><strong>Message:</strong> ${message}</p><p>Please log in to the admin dashboard to reply.</p>`
+        }).catch(console.error);
+      }
+    }
+  }
+
   res.json({ id: result.lastInsertRowid, created_at: new Date().toISOString() });
 };
 

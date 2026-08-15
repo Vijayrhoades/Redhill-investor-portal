@@ -55,3 +55,16 @@ export const getNewProjects = (req: AuthRequest, res: Response) => {
     res.status(500).json({ error: e.message });
   }
 };
+
+export const getPayments = (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId } = req.params;
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const payments = db.prepare('SELECT * FROM payments WHERE project_id = ? AND user_id = ? ORDER BY date DESC').all(projectId, userId);
+    res.json(payments);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+};

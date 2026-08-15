@@ -7,7 +7,7 @@ import {
   Image as ImageIcon, Video, Bell, Save, Trash2, UserPlus, MapPin,
   MessageCircle, Send, ArrowLeft, Pencil, Copy, Check, ExternalLink, Eye, EyeOff,
   Search, MoreHorizontal, ChevronDown, ChevronUp, Wallet, MoreVertical, Hammer,
-  Upload, Link as LinkIcon, X, FileVideo
+  Upload, Link as LinkIcon, X, FileVideo, IndianRupee, Shield
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
@@ -32,7 +32,7 @@ interface AdminDashboardProps {
 
 export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   const { showToast } = useToast();
-  const [activeView, setActiveView] = useState<'overview' | 'investors' | 'projects' | 'queries'>('overview');
+  const [activeView, setActiveView] = useState<'overview' | 'investors' | 'projects' | 'queries' | 'admins'>('overview');
   const [selectedThread, setSelectedThread] = useState<Query | null>(null);
   const [replyMessage, setReplyMessage] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
@@ -50,7 +50,17 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
     queryFn: async () => {
       const res = await fetch('/api/admin/projects');
       return res.json();
-    }
+    },
+    enabled: user.role !== 'support_agent'
+  });
+
+  const { data: adminsList = [], isLoading: loadingAdmins, refetch: refetchAdmins } = useQuery<User[]>({
+    queryKey: ['admin-users'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/users');
+      return res.json();
+    },
+    enabled: user.role === 'super_admin'
   });
 
   const { data: threads = [], refetch: refetchThreads } = useQuery<Query[]>({
@@ -80,6 +90,14 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
     refetchInterval: 5000,
   });
 
+  const { data: analytics, refetch: refetchAnalytics } = useQuery({
+    queryKey: ['admin-analytics'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/analytics');
+      return res.json();
+    }
+  });
+
   const loading = loadingInvestors || loadingProjects;
 
   // fetchData acts as a refetch wrapper now to support the legacy calls
@@ -88,6 +106,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
     refetchProjects();
     refetchAssignments();
     refetchThreads();
+    refetchAnalytics();
   };
 
   // Form states
@@ -140,6 +159,13 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
   const [invPhone, setInvPhone] = useState('');
   const [invPassword, setInvPassword] = useState('investor123');
 
+  // Admin Management form state
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [admName, setAdmName] = useState('');
+  const [admEmail, setAdmEmail] = useState('');
+  const [admRole, setAdmRole] = useState<'super_admin'|'site_manager'|'support_agent'>('site_manager');
+  const [admPassword, setAdmPassword] = useState('admin123');
+
   // Assignment form state
   const [assignUserId, setAssignUserId] = useState('');
   const [assignProjectId, setAssignProjectId] = useState('');
@@ -151,8 +177,10 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
   // Milestone form state
   const [mCategory, setMCategory] = useState<MilestoneCategory>('documentation');
   const [mName, setMName] = useState('');
-  const [mStatus, setMStatus] = useState<MilestoneStatus>('pending');
+  const [mStatus, setMStatus] = useState<'pending' | 'in_progress' | 'completed'>('pending');
   const [mDocUrl, setMDocUrl] = useState('');
+  const [mDocFile, setMDocFile] = useState<File | null>(null);
+  const mDocFileRef = useRef<HTMLInputElement>(null);
 
   // Update form state
   const [updateType, setUpdateType] = useState<'photo' | 'video'>('photo');
@@ -168,6 +196,18 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
 
   // CCTV form state
   const [cctvUrl, setCctvUrl] = useState('');
+
+  // Payment form state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [payProjectId, setPayProjectId] = useState('');
+  const [payUserId, setPayUserId] = useState('');
+  const [payAmount, setPayAmount] = useState('');
+  const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0]);
+  const [payType, setPayType] = useState<'invoice'|'receipt'>('invoice');
+  const [payStatus, setPayStatus] = useState<'pending'|'paid'>('pending');
+  const [payDesc, setPayDesc] = useState('');
+  const [payFileUrl, setPayFileUrl] = useState('');
+  
   // Edit Project form state (#40)
   const [showEditProjectModal, setShowEditProjectModal] = useState(false);
   const [editPId, setEditPId] = useState<number | null>(null);
@@ -364,6 +404,32 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
     e.preventDefault();
     if (!selectedProject) return;
 
+    let finalDocUrl = mDocUrl;
+    if (mDocFile) {
+      setUploading(true);
+      try {
+        const formData = new FormData();
+        formData.append('file', mDocFile);
+        const uploadRes = await fetch('/api/admin/upload', {
+          method: 'POST',
+          body: formData
+        });
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          finalDocUrl = uploadData.url;
+        } else {
+          showToast('Failed to upload document', 'error');
+          setUploading(false);
+          return;
+        }
+      } catch (err) {
+        showToast('Failed to upload document', 'error');
+        setUploading(false);
+        return;
+      }
+      setUploading(false);
+    }
+
     const res = await fetch('/api/admin/milestones', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -372,7 +438,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
         category: mCategory,
         name: mName,
         status: mStatus,
-        doc_url: mDocUrl,
+        doc_url: finalDocUrl,
         completion_percentage: mStatus === 'completed' ? 100 : (mStatus === 'in_progress' ? 50 : 0)
       })
     });
@@ -382,6 +448,8 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
       setShowMilestoneModal(false);
       setMName('');
       setMDocUrl('');
+      setMDocFile(null);
+      if (mDocFileRef.current) mDocFileRef.current.value = '';
       showToast('Milestone added successfully!', 'success');
     } else {
       showToast('Failed to add milestone', 'error');
@@ -540,6 +608,31 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
     onLogout();
   };
 
+  const handleCreateAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: admName, email: admEmail, role: admRole, password: admPassword })
+      });
+      if (res.ok) {
+        refetchAdmins();
+        setShowAdminModal(false);
+        setAdmName('');
+        setAdmEmail('');
+        setAdmRole('site_manager');
+        showToast('Admin created successfully', 'success');
+      } else {
+        const data = await res.json();
+        showToast(`Error: ${data.error}`, 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('An error occurred', 'error');
+    }
+  };
+
   const handleDeleteInvestor = (id: number, name: string) => {
     setConfirmDialog({
       isOpen: true,
@@ -566,6 +659,48 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
         }
       }
     });
+  };
+
+  const openPaymentModal = (assignment: any) => {
+    setPayProjectId(assignment.project_id.toString());
+    setPayUserId(assignment.user_id.toString());
+    setPayAmount('');
+    setPayDate(new Date().toISOString().split('T')[0]);
+    setPayType('invoice');
+    setPayStatus('pending');
+    setPayDesc('');
+    setPayFileUrl('');
+    setShowPaymentModal(true);
+  };
+
+  const handleRecordPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/admin/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: parseInt(payProjectId),
+          user_id: parseInt(payUserId),
+          amount: parseFloat(payAmount),
+          date: payDate,
+          type: payType,
+          status: payStatus,
+          description: payDesc,
+          file_url: payFileUrl || null
+        })
+      });
+      if (res.ok) {
+        showToast('Payment/Invoice recorded successfully', 'success');
+        setShowPaymentModal(false);
+      } else {
+        const data = await res.json();
+        showToast(`Error: ${data.error}`, 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('An error occurred', 'error');
+    }
   };
 
   const openEditInvestment = (assignment: any) => {
@@ -663,10 +798,11 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
         <nav className="flex-1 p-4 space-y-2">
           {[
             { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-            { id: 'projects', label: 'Projects', icon: Building2 },
-            { id: 'investors', label: 'Investors', icon: Users },
+            { id: 'projects', label: 'Projects', icon: Building2, hidden: user.role === 'support_agent' },
+            { id: 'investors', label: 'Investors', icon: Users, hidden: user.role === 'support_agent' },
             { id: 'queries', label: 'Investor Queries', icon: MessageCircle },
-          ].map((item) => (
+            { id: 'admins', label: 'Admin Management', icon: Shield, hidden: user.role !== 'super_admin' },
+          ].filter(item => !item.hidden).map((item) => (
             <button
               key={item.id}
               onClick={() => setActiveView(item.id as any)}
@@ -718,6 +854,8 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                 <p className="text-gray-400 mt-1">Welcome back. Here's what's happening with Redhill projects.</p>
               </div>
             </div>
+
+
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <button
@@ -1121,7 +1259,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                         <th className="px-5 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Rate at Investment</th>
                         <th className="px-5 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Current Rate</th>
                         <th className="px-5 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer hover:text-white" onClick={() => { setAssignmentSortField('date'); setAssignmentSortDir(d => d === 'asc' ? 'desc' : 'asc'); }}>Inv. Date {assignmentSortField === 'date' && (assignmentSortDir === 'asc' ? '↑' : '↓')}</th>
-                        <th className="px-5 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">Edit</th>
+                        <th className="px-5 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/[0.05]">
@@ -1150,13 +1288,22 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                             <p className="text-xs text-gray-500">{a.investment_date ? formatDate(a.investment_date) : 'N/A'}</p>
                           </td>
                           <td className="px-5 py-3 text-right">
-                            <button
-                              onClick={() => openEditInvestment(a)}
-                              className="p-2 text-gray-500 hover:text-white transition-colors cursor-pointer rounded-lg hover:bg-white/10"
-                              title="Edit Investment"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => openPaymentModal(a)}
+                                className="p-2 text-gray-500 hover:text-emerald-400 transition-colors cursor-pointer rounded-lg hover:bg-emerald-400/10"
+                                title="Record Payment/Invoice"
+                              >
+                                <IndianRupee className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => openEditInvestment(a)}
+                                className="p-2 text-gray-500 hover:text-white transition-colors cursor-pointer rounded-lg hover:bg-white/10"
+                                title="Edit Investment"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -1439,7 +1586,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept="image/*,video/*"
+                      accept="*/*"
                       onChange={handleFileInputChange}
                       className="hidden"
                     />
@@ -1587,19 +1734,44 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                 />
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-400 mb-1">Document/Approval URL (Optional)</label>
-                <input
-                  type="text"
-                  value={mDocUrl}
-                  onChange={(e) => setMDocUrl(e.target.value)}
-                  className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.08] rounded-xl outline-none text-white focus:bg-white/[0.05] focus:border-redhill-red/40 focus:ring-2 focus:ring-redhill-red/10 transition-all"
-                  placeholder="https://..."
-                />
-                <p className="text-[10px] text-gray-500 mt-1 italic">This URL will be available for investors to download/view.</p>
+                <label className="block text-sm font-bold text-gray-400 mb-1">Document/Approval File (Optional)</label>
+                <div className="flex flex-col gap-2">
+                  <input
+                    ref={mDocFileRef}
+                    type="file"
+                    accept="*/*"
+                    onChange={(e) => setMDocFile(e.target.files?.[0] || null)}
+                    className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.08] rounded-xl outline-none text-white focus:bg-white/[0.05] focus:border-redhill-red/40 transition-all file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-redhill-red file:text-white hover:file:bg-red-700"
+                  />
+                  <div className="flex items-center gap-2">
+                    <div className="h-[1px] flex-1 bg-white/[0.05]" />
+                    <span className="text-xs text-gray-500 font-bold uppercase tracking-widest">OR</span>
+                    <div className="h-[1px] flex-1 bg-white/[0.05]" />
+                  </div>
+                  <input
+                    type="text"
+                    value={mDocUrl}
+                    onChange={(e) => setMDocUrl(e.target.value)}
+                    className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.08] rounded-xl outline-none text-white focus:bg-white/[0.05] focus:border-redhill-red/40 focus:ring-2 focus:ring-redhill-red/10 transition-all"
+                    placeholder="Paste external URL (https://...)"
+                  />
+                </div>
+                <p className="text-[10px] text-gray-500 mt-2 italic">Upload a document or provide a link for investors to download/view.</p>
               </div>
               <div className="pt-4 flex gap-4">
-                <button type="button" onClick={() => setShowMilestoneModal(false)} className="flex-1 py-3 font-bold text-gray-400 hover:bg-white/5 rounded-xl transition-all cursor-pointer">Cancel</button>
-                <button type="submit" className="flex-1 bg-redhill-red text-white py-3 font-bold rounded-xl shadow-lg shadow-redhill-red/20 hover:bg-red-700 transition-all cursor-pointer">Add Milestone</button>
+                <button type="button" onClick={() => { setShowMilestoneModal(false); setMDocFile(null); if (mDocFileRef.current) mDocFileRef.current.value = ''; }} className="flex-1 py-3 font-bold text-gray-400 hover:bg-white/5 rounded-xl transition-all cursor-pointer">Cancel</button>
+                <button 
+                  type="submit" 
+                  disabled={uploading}
+                  className={cn("flex-1 bg-redhill-red text-white py-3 font-bold rounded-xl shadow-lg shadow-redhill-red/20 hover:bg-red-700 transition-all cursor-pointer flex justify-center items-center gap-2", uploading && "opacity-60 cursor-not-allowed")}
+                >
+                  {uploading ? (
+                    <>
+                      <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                      Uploading...
+                    </>
+                  ) : 'Add Milestone'}
+                </button>
               </div>
             </form>
           </div>
@@ -1932,6 +2104,167 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                 <button type="button" onClick={() => setShowEditInvestmentModal(false)} className="flex-1 py-3 font-bold text-gray-400 hover:bg-white/5 rounded-xl transition-all cursor-pointer">Cancel</button>
                 <button type="submit" className="flex-1 bg-redhill-red text-white py-3 font-bold rounded-xl shadow-lg shadow-redhill-red/20 hover:bg-red-700 transition-all cursor-pointer">Save Changes</button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Admins View */}
+      {activeView === 'admins' && user.role === 'super_admin' && (
+        <div className="p-8 max-w-7xl mx-auto space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-white font-serif">Admin Management</h1>
+              <p className="text-gray-400 mt-1">Manage portal administrators and roles.</p>
+            </div>
+            <button
+              onClick={() => setShowAdminModal(true)}
+              className="flex items-center gap-2 bg-redhill-red hover:bg-red-700 text-white px-4 py-2 rounded-xl font-bold transition-all shadow-lg shadow-redhill-red/20"
+            >
+              <UserPlus className="w-5 h-5" />
+              New Admin
+            </button>
+          </div>
+
+          <div className="bg-redhill-gray border border-white/[0.06] rounded-2xl overflow-hidden">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-black/20 border-b border-white/[0.06]">
+                  <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Name</th>
+                  <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Email</th>
+                  <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Role</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/[0.05]">
+                {adminsList.map((a: any) => (
+                  <tr key={a.id} className="hover:bg-white/[0.02]">
+                    <td className="px-6 py-4 font-bold text-white">{a.name}</td>
+                    <td className="px-6 py-4 text-gray-400">{a.email}</td>
+                    <td className="px-6 py-4">
+                      <span className={cn(
+                        "px-3 py-1 rounded-full text-xs font-bold tracking-wider",
+                        a.role === 'super_admin' ? "bg-amber-500/20 text-amber-500" :
+                        a.role === 'site_manager' ? "bg-emerald-500/20 text-emerald-500" :
+                        "bg-blue-500/20 text-blue-500"
+                      )}>
+                        {a.role.replace('_', ' ').toUpperCase()}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Modal */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#1a1b23] rounded-2xl max-w-md w-full border border-white/10 overflow-hidden shadow-2xl">
+            <div className="p-6 border-b border-white/5 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <IndianRupee className="w-5 h-5 text-emerald-400" />
+                Record Payment / Invoice
+              </h2>
+              <button onClick={() => setShowPaymentModal(false)} className="text-gray-400 hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleRecordPayment} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">Type</label>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setPayType('invoice')} className={cn("flex-1 py-2 text-sm font-bold rounded-lg border transition-colors", payType === 'invoice' ? "bg-amber-500/20 border-amber-500 text-amber-500" : "bg-white/5 border-transparent text-gray-400")}>Invoice</button>
+                  <button type="button" onClick={() => setPayType('receipt')} className={cn("flex-1 py-2 text-sm font-bold rounded-lg border transition-colors", payType === 'receipt' ? "bg-emerald-500/20 border-emerald-500 text-emerald-500" : "bg-white/5 border-transparent text-gray-400")}>Receipt</button>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">Amount (₹)</label>
+                  <input type="number" required value={payAmount} onChange={e => setPayAmount(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white outline-none focus:border-emerald-500/50" placeholder="e.g. 50000" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">Date</label>
+                  <input type="date" required value={payDate} onChange={e => setPayDate(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white outline-none focus:border-emerald-500/50" />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">Status</label>
+                <select value={payStatus} onChange={e => setPayStatus(e.target.value as any)} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white outline-none focus:border-emerald-500/50">
+                  <option value="pending">Pending</option>
+                  <option value="paid">Paid</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">Description</label>
+                <input type="text" required value={payDesc} onChange={e => setPayDesc(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white outline-none focus:border-emerald-500/50" placeholder="e.g. Installment 1" />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">Document URL (Optional)</label>
+                <input type="url" value={payFileUrl} onChange={e => setPayFileUrl(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white outline-none focus:border-emerald-500/50" placeholder="https://..." />
+              </div>
+
+              <button type="submit" className="w-full py-3 bg-gradient-to-r from-emerald-500 to-emerald-700 text-white font-bold rounded-xl hover:shadow-lg hover:shadow-emerald-500/20 transition-all">
+                Save Record
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Admin Modal */}
+      {showAdminModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#1a1b23] rounded-2xl max-w-md w-full border border-white/10 overflow-hidden shadow-2xl">
+            <div className="p-6 border-b border-white/5 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <Shield className="w-5 h-5 text-redhill-red" />
+                Add New Administrator
+              </h2>
+              <button onClick={() => setShowAdminModal(false)} className="text-gray-400 hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleCreateAdmin} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">Name</label>
+                <input type="text" required value={admName} onChange={e => setAdmName(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white outline-none focus:border-redhill-red/50" />
+              </div>
+              
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">Email Address</label>
+                <input type="email" required value={admEmail} onChange={e => setAdmEmail(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white outline-none focus:border-redhill-red/50" />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">Role</label>
+                <select value={admRole} onChange={e => setAdmRole(e.target.value as any)} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white outline-none focus:border-redhill-red/50">
+                  <option value="super_admin">Super Admin</option>
+                  <option value="site_manager">Site Manager</option>
+                  <option value="support_agent">Support Agent</option>
+                </select>
+                <p className="text-[10px] text-gray-500 mt-1">
+                  {admRole === 'super_admin' && "Has full access to all portal features and user management."}
+                  {admRole === 'site_manager' && "Can manage projects, updates, milestones, and investments."}
+                  {admRole === 'support_agent' && "Can only view and reply to investor queries."}
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5">Temporary Password</label>
+                <input type="text" required value={admPassword} onChange={e => setAdmPassword(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white outline-none focus:border-redhill-red/50" />
+              </div>
+
+              <button type="submit" className="w-full py-3 bg-gradient-to-r from-redhill-red to-red-700 text-white font-bold rounded-xl hover:shadow-lg hover:shadow-redhill-red/20 transition-all">
+                Create Admin
+              </button>
             </form>
           </div>
         </div>

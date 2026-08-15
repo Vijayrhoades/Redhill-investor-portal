@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import {
   Building2, MapPin, Calendar, CheckCircle2, Clock, AlertCircle,
   FileText, Image as ImageIcon, Video, Bell, ChevronLeft,
-  Download, ExternalLink, LogOut, MessageCircle, Send, ChevronUp, ChevronRight
+  Download, ExternalLink, LogOut, MessageCircle, Send, ChevronUp, ChevronRight, IndianRupee
 } from 'lucide-react';
 import { User, Project, Milestone, ProgressUpdate, Announcement, Query } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -27,6 +27,10 @@ interface ProjectDetailProps {
 export default function ProjectDetail({ user, onLogout }: ProjectDetailProps) {
   const { id } = useParams();
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<'progress' | 'docs' | 'media' | 'queries' | 'ledger'>('progress');
+  const [newMessage, setNewMessage] = useState('');
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading: loading } = useQuery<{
     project: Project;
@@ -39,6 +43,16 @@ export default function ProjectDetail({ user, onLogout }: ProjectDetailProps) {
     queryFn: async () => {
       const res = await fetch(`/api/investor/projects/${id}`);
       if (!res.ok) throw new Error('Failed to fetch project details');
+      return res.json();
+    },
+    enabled: !!id,
+  });
+
+  const { data: payments = [], isLoading: loadingPayments } = useQuery<any[]>({
+    queryKey: ['project-payments', id],
+    queryFn: async () => {
+      const res = await fetch(`/api/investor/payments/${id}`);
+      if (!res.ok) throw new Error('Failed to fetch payments');
       return res.json();
     },
     enabled: !!id,
@@ -144,8 +158,14 @@ export default function ProjectDetail({ user, onLogout }: ProjectDetailProps) {
           <div className="flex items-center gap-4">
             <Logo light={true} />
             <div className="h-8 w-[1px] bg-white/[0.08] mx-2 hidden sm:block" />
-            <div className="hidden sm:flex items-center gap-2 text-sm">
-              <Link to="/dashboard" className="text-gray-400 hover:text-white transition-colors">Dashboard</Link>
+            <Link 
+              to={user.role === 'admin' ? '/admin' : '/dashboard'} 
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-sm font-medium transition-all border border-white/5 cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4 text-redhill-red" />
+              <span>Back to Dashboard</span>
+            </Link>
+            <div className="hidden md:flex items-center gap-2 text-sm">
               <ChevronRight className="w-4 h-4 text-gray-600" />
               <span className="text-white font-medium truncate max-w-[200px]">{project.name}</span>
             </div>
@@ -291,6 +311,7 @@ export default function ProjectDetail({ user, onLogout }: ProjectDetailProps) {
             {[
               { id: 'progress', label: 'Project Progress', icon: Clock, count: milestones.length },
               { id: 'docs', label: 'Documents & Approvals', icon: FileText, count: docMilestones.length + approvalMilestones.length },
+              { id: 'ledger', label: 'Ledger & Invoices', icon: IndianRupee, count: payments.length },
               { id: 'media', label: 'Media Feed', icon: ImageIcon, count: updates.length },
               { id: 'queries', label: 'Queries & Help', icon: MessageCircle, count: queries.length },
             ].map((tab) => (
@@ -695,6 +716,68 @@ export default function ProjectDetail({ user, onLogout }: ProjectDetailProps) {
                   <Send className="w-4 h-4" />
                 </button>
               </form>
+            </motion.div>
+          )}
+
+          {activeTab === 'ledger' && (
+            <motion.div
+              key="ledger"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="max-w-4xl mx-auto"
+            >
+              <div className="bg-redhill-gray rounded-2xl border border-white/5 overflow-hidden">
+                <div className="p-6 border-b border-white/5 bg-black/20 flex items-center justify-between">
+                  <h3 className="font-bold text-white flex items-center gap-2">
+                    <IndianRupee className="w-5 h-5 text-redhill-red" />
+                    Payment Ledger
+                  </h3>
+                </div>
+                <div className="divide-y divide-white/5">
+                  {payments.length === 0 ? (
+                    <div className="p-12 text-center text-gray-500">
+                      <IndianRupee className="w-12 h-12 text-gray-700 mx-auto mb-4" />
+                      <p>No payments or invoices recorded yet.</p>
+                    </div>
+                  ) : (
+                    payments.map((payment: any) => (
+                      <div key={payment.id} className="p-6 flex items-start justify-between hover:bg-white/[0.02] transition-colors">
+                        <div className="flex gap-4">
+                          <div className={cn(
+                            "w-12 h-12 rounded-xl flex items-center justify-center shrink-0",
+                            payment.type === 'invoice' ? "bg-amber-500/10 text-amber-500" : "bg-emerald-500/10 text-emerald-500"
+                          )}>
+                            {payment.type === 'invoice' ? <FileText className="w-6 h-6" /> : <IndianRupee className="w-6 h-6" />}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-3 mb-1">
+                              <h4 className="font-bold text-white capitalize">{payment.type}</h4>
+                              <StatusChip status={payment.status === 'paid' ? 'completed' : 'pending'} />
+                            </div>
+                            <p className="text-sm text-gray-400 max-w-md">{payment.description}</p>
+                            <p className="text-xs text-gray-500 mt-2">{formatDate(payment.date)}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xl font-bold text-white">{formatCurrency(payment.amount)}</p>
+                          {payment.file_url && (
+                            <a 
+                              href={payment.file_url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 mt-2 text-xs font-bold text-redhill-red hover:text-red-400 transition-colors"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              Download {payment.type === 'invoice' ? 'Invoice' : 'Receipt'}
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

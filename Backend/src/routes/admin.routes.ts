@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import {
+  getAdmins,
+  createAdmin,
   getInvestors,
   createInvestor,
   deleteInvestor,
@@ -13,38 +15,51 @@ import {
   createMilestone,
   updateMilestone,
   createUpdate,
-  uploadFile
+  uploadFile,
+  getAnalytics,
+  getPayments,
+  addPayment
 } from '../controllers/admin.controller.js';
 import { authenticateToken, isAdmin } from '../middlewares/auth.middleware.js';
 import { upload } from '../middlewares/upload.middleware.js';
 
 const router = Router();
 
-// Apply auth & admin middlewares to all admin routes
-router.use(authenticateToken, isAdmin);
+// Admin Management (Super Admin only)
+router.get('/admin/users', authenticateToken, isAdmin, getAdmins);
+router.post('/admin/users', authenticateToken, isAdmin, createAdmin);
+
+// Analytics
+router.get('/admin/analytics', authenticateToken, isAdmin, getAnalytics);
 
 // Investor Management
-router.get('/admin/investors', getInvestors);
-router.post('/admin/investors', createInvestor);
-router.delete('/admin/investors/:id', deleteInvestor);
+router.get('/admin/investors', authenticateToken, isAdmin, getInvestors);
+router.post('/admin/investors', authenticateToken, isAdmin, createInvestor);
+router.delete('/admin/investors/:id', authenticateToken, isAdmin, deleteInvestor);
 
 // Project Management
-router.get('/admin/projects', getProjects);
-router.post('/admin/projects', createProject);
-router.patch('/admin/projects/:id/cctv', updateCctv);
+router.get('/admin/projects', authenticateToken, isAdmin, getProjects);
+router.post('/admin/projects', authenticateToken, isAdmin, createProject);
+router.patch('/admin/projects/:id/cctv', authenticateToken, isAdmin, updateCctv);
 
 // Assignment & Financial Management
-router.post('/admin/assign', assignInvestor);
-router.patch('/admin/investor-project/:userId/:projectId', updateAssignment);
-router.get('/admin/investor-projects', getAssignments);
+router.post('/admin/assign', authenticateToken, isAdmin, assignInvestor);
+router.patch('/admin/investor-project/:userId/:projectId', authenticateToken, isAdmin, updateAssignment);
+router.get('/admin/investor-projects', authenticateToken, isAdmin, getAssignments);
 
 // Milestones
-router.get('/admin/projects/:id/milestones', getMilestones);
-router.post('/admin/milestones', createMilestone);
-router.patch('/admin/milestones/:id', updateMilestone);
+router.get('/admin/projects/:id/milestones', authenticateToken, isAdmin, getMilestones);
+router.post('/admin/milestones', authenticateToken, isAdmin, createMilestone);
+router.patch('/admin/milestones/:id', authenticateToken, isAdmin, updateMilestone);
 
-// Updates & File Uploads
-router.post('/admin/updates', createUpdate);
-router.post('/upload', upload.single('file'), uploadFile);
+// Updates
+router.post('/admin/updates', authenticateToken, isAdmin, createUpdate);
+
+// Uploads
+router.post('/admin/upload', authenticateToken, isAdmin, upload.single('file'), uploadFile);
+
+// Payments
+router.get('/admin/payments/:projectId/:userId', authenticateToken, isAdmin, getPayments);
+router.post('/admin/payments', authenticateToken, isAdmin, addPayment);
 
 export default router;

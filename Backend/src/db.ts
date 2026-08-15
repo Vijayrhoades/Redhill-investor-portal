@@ -12,7 +12,7 @@ db.exec(`
     email TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
     name TEXT NOT NULL,
-    role TEXT CHECK(role IN ('admin', 'investor')) NOT NULL,
+    role TEXT NOT NULL,
     phone TEXT,
     login_id TEXT UNIQUE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -82,6 +82,21 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(user_id) REFERENCES users(id),
     FOREIGN KEY(project_id) REFERENCES projects(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    amount REAL NOT NULL,
+    date TEXT NOT NULL,
+    type TEXT CHECK(type IN ('invoice', 'receipt')) NOT NULL,
+    status TEXT CHECK(status IN ('pending', 'paid')) NOT NULL,
+    description TEXT,
+    file_url TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(project_id) REFERENCES projects(id),
+    FOREIGN KEY(user_id) REFERENCES users(id)
   );
 `);
 

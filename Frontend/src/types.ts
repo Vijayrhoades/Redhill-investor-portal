@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'investor';
+export type Role = 'super_admin' | 'site_manager' | 'support_agent' | 'admin' | 'investor';
 
 export interface User {
   id: number;
