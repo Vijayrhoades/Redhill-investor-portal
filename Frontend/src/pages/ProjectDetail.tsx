@@ -115,6 +115,7 @@ export default function ProjectDetail({ user, onLogout }: ProjectDetailProps) {
             </div>
           </div>
         </div>
+        </div>
       </Layout>
     );
   }

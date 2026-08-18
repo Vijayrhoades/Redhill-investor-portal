@@ -1423,7 +1423,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
             </div>
           </div>
         )}
-      </main>
+      </div>
 
       {/* Modals (Simplified for now) */}
       {showProjectModal && (
