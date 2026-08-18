@@ -50,6 +50,7 @@ export interface ProgressUpdate {
   caption: string;
   date: string;
   milestone_id?: number;
+  created_at?: string;
 }
 
 export interface Announcement {
@@ -69,4 +70,25 @@ export interface Query {
   created_at: string;
   userName?: string;
   projectName?: string;
+}
+
+export type LedgerTransactionType = 'initial_assignment' | 'sub_investment' | 'adjustment';
+
+export interface LedgerEntry {
+  id: number;
+  user_id: number;
+  project_id: number;
+  transaction_type: LedgerTransactionType;
+  investment_amount: number;
+  allotted_sqft: number;
+  price_at_investment: number;
+  market_price_per_sqft: number;
+  contribution?: string;
+  note?: string;
+  transaction_date: string;
+  created_at: string;
+  investor_name?: string;
+  investor_email?: string;
+  investor_login_id?: string;
+  project_name?: string;
 }

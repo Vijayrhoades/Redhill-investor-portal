@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { User, Project, Milestone, MilestoneCategory, MilestoneStatus, Query } from '../types';
+import { User, Project, Milestone, MilestoneCategory, MilestoneStatus, Query, LedgerEntry } from '../types';
 import {
   Users, Building2, Plus, Settings, LogOut,
   LayoutDashboard, CheckCircle2, Clock, AlertCircle,
   Image as ImageIcon, Video, Bell, Save, Trash2, UserPlus, MapPin,
   MessageCircle, Send, ArrowLeft, Pencil, Copy, Check, ExternalLink, Eye, EyeOff,
   Search, MoreHorizontal, ChevronDown, ChevronUp, Wallet, MoreVertical, Hammer,
-  Upload, Link as LinkIcon, X, FileVideo, IndianRupee, Shield
+  Upload, Link as LinkIcon, X, FileVideo, IndianRupee, Shield,
+  BookOpen, TrendingUp, History, PlusCircle, ArrowUpRight, Receipt, RotateCw
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
@@ -33,7 +34,7 @@ interface AdminDashboardProps {
 
 export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   const { showToast } = useToast();
-  const [activeView, setActiveView] = useState<'overview' | 'investors' | 'projects' | 'queries' | 'admins'>('overview');
+  const [activeView, setActiveView] = useState<'overview' | 'investors' | 'projects' | 'queries' | 'admins' | 'ledger'>('overview');
   const [selectedThread, setSelectedThread] = useState<Query | null>(null);
   const [replyMessage, setReplyMessage] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
@@ -80,6 +81,15 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
     }
   });
 
+  const { data: ledgerEntries = [], isLoading: loadingLedger, refetch: refetchLedger } = useQuery<LedgerEntry[]>({
+    queryKey: ['admin-ledger'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/ledger');
+      return res.json();
+    },
+    enabled: user.role !== 'support_agent'
+  });
+
   const { data: threadMessages = [], refetch: refetchThreadMessages } = useQuery<Query[]>({
     queryKey: ['admin-thread', selectedThread?.user_id, selectedThread?.project_id],
     queryFn: async () => {
@@ -98,6 +108,24 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
       return res.json();
     }
   });
+
+  // Sub-Investment / Upgrade state
+  const [showSubInvestmentModal, setShowSubInvestmentModal] = useState(false);
+  const [targetAssignment, setTargetAssignment] = useState<any | null>(null);
+  const [subInvAmt, setSubInvAmt] = useState('');
+  const [subSqft, setSubSqft] = useState('');
+  const [subPriceAtInv, setSubPriceAtInv] = useState('');
+  const [subMarketPrice, setSubMarketPrice] = useState('');
+  const [subContribution, setSubContribution] = useState('');
+  const [subNote, setSubNote] = useState('');
+  const [subDate, setSubDate] = useState(new Date().toISOString().split('T')[0]);
+  const [submittingSubInv, setSubmittingSubInv] = useState(false);
+
+  // Ledger view state
+  const [ledgerSearch, setLedgerSearch] = useState('');
+  const [ledgerProjectFilter, setLedgerProjectFilter] = useState('all');
+  const [ledgerTypeFilter, setLedgerTypeFilter] = useState('all');
+  const [historyModalAssignment, setHistoryModalAssignment] = useState<any | null>(null);
 
   const loading = loadingInvestors || loadingProjects;
 
@@ -393,7 +421,8 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
       setAssignInvestmentAmt('');
       setAssignSqft('');
       setAssignMarketPrice('');
-      fetchAssignments();
+      refetchAssignments();
+      refetchLedger();
       showToast('Investor assigned to project successfully!', 'success');
     } else {
       const data = await res.json();
@@ -647,8 +676,9 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
             headers: { 'Content-Type': 'application/json' }
           });
           if (res.ok) {
-            setInvestors(prev => prev.filter(i => i.id !== id));
-            fetchAssignments();
+            refetchInvestors();
+            refetchAssignments();
+            refetchLedger();
             showToast(`${name} has been deleted successfully.`, 'success');
           } else {
             const data = await res.json();
@@ -735,11 +765,64 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
     if (res.ok) {
       setShowEditInvestmentModal(false);
       setEditingAssignment(null);
-      fetchAssignments();
+      refetchAssignments();
+      refetchLedger();
       showToast('Investment details updated successfully!', 'success');
     } else {
       const data = await res.json();
       showToast(`Error: ${data.error}`, 'error');
+    }
+  };
+
+  const openSubInvestmentModal = (assignment: any) => {
+    setTargetAssignment(assignment);
+    setSubInvAmt('');
+    setSubSqft('');
+    setSubPriceAtInv(String(assignment.price_at_investment || ''));
+    setSubMarketPrice(String(assignment.market_price_per_sqft || ''));
+    setSubContribution('');
+    setSubNote('');
+    setSubDate(new Date().toISOString().split('T')[0]);
+    setShowSubInvestmentModal(true);
+  };
+
+  const handleSubInvestmentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetAssignment) return;
+    setSubmittingSubInv(true);
+
+    try {
+      const res = await fetch('/api/admin/ledger/sub-investment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: targetAssignment.user_id,
+          project_id: targetAssignment.project_id,
+          investment_amount: parseFloat(subInvAmt) || 0,
+          allotted_sqft: parseFloat(subSqft) || 0,
+          price_at_investment: parseFloat(subPriceAtInv) || targetAssignment.price_at_investment || 0,
+          market_price_per_sqft: parseFloat(subMarketPrice) || targetAssignment.market_price_per_sqft || 0,
+          contribution: subContribution || null,
+          note: subNote || 'Sub-investment addition / upgrade',
+          transaction_date: subDate || new Date().toISOString().split('T')[0]
+        })
+      });
+
+      if (res.ok) {
+        setShowSubInvestmentModal(false);
+        setTargetAssignment(null);
+        refetchAssignments();
+        refetchLedger();
+        refetchAnalytics();
+        showToast('Sub-investment upgraded & logged to Ledger successfully!', 'success');
+      } else {
+        const data = await res.json();
+        showToast(`Error: ${data.error}`, 'error');
+      }
+    } catch (err: any) {
+      showToast(`Error: ${err.message}`, 'error');
+    } finally {
+      setSubmittingSubInv(false);
     }
   };
 
@@ -794,6 +877,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
         { id: 'overview', label: 'Overview', icon: LayoutDashboard },
         { id: 'projects', label: 'Projects', icon: Building2, hidden: user.role === 'support_agent' },
         { id: 'investors', label: 'Investors', icon: Users, hidden: user.role === 'support_agent' },
+        { id: 'ledger', label: 'Investment Ledger', icon: BookOpen, hidden: user.role === 'support_agent' },
         { id: 'queries', label: 'Investor Queries', icon: MessageCircle },
         { id: 'admins', label: 'Admin Management', icon: Shield, hidden: user.role !== 'super_admin' },
       ].filter(item => !item.hidden).map((item) => (
@@ -1273,11 +1357,19 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                                 <IndianRupee className="w-4 h-4" />
                               </button>
                               <button
+                                onClick={() => openSubInvestmentModal(a)}
+                                className="p-2 text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all cursor-pointer rounded-lg flex items-center gap-1.5 text-xs font-bold"
+                                title="Upgrade Investment / Log Sub-Investment"
+                              >
+                                <TrendingUp className="w-4 h-4" />
+                                <span className="hidden sm:inline">Upgrade</span>
+                              </button>
+                              <button
                                 onClick={() => openEditInvestment(a)}
                                 className="p-2 text-gray-500 hover:text-white transition-colors cursor-pointer rounded-lg hover:bg-white/10"
-                                title="Edit Investment"
+                                title="Edit Assignment Details"
                               >
-                                <Pencil className="w-4 h-4" />
+                                <Pencil className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           </td>
@@ -1419,6 +1511,188 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                     <p className="max-w-xs mx-auto text-sm">Click on a conversation from the list to view messages and reply.</p>
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Investment Ledger View */}
+        {activeView === 'ledger' && (
+          <div className="space-y-8">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <BookOpen className="w-8 h-8 text-redhill-red" />
+                  <h1 className="text-3xl font-bold text-white font-serif">Investment Ledger System</h1>
+                </div>
+                <p className="text-gray-400 mt-1">Audit log of all investor assignments, sub-investments, and capital upgrades.</p>
+              </div>
+            </div>
+
+            {/* KPI Summary Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-redhill-gray p-6 rounded-2xl border border-white/[0.06] shadow-lg">
+                <div className="w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-xl flex items-center justify-center mb-4">
+                  <IndianRupee className="w-6 h-6" />
+                </div>
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Total Capital Logged</p>
+                <p className="text-2xl font-bold text-white mt-1">
+                  {formatCurrency(ledgerEntries.reduce((sum, e) => sum + (e.investment_amount || 0), 0))}
+                </p>
+              </div>
+
+              <div className="bg-redhill-gray p-6 rounded-2xl border border-white/[0.06] shadow-lg">
+                <div className="w-12 h-12 bg-purple-500/10 text-purple-400 rounded-xl flex items-center justify-center mb-4">
+                  <TrendingUp className="w-6 h-6" />
+                </div>
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Sub-Investment Upgrades</p>
+                <p className="text-2xl font-bold text-white mt-1">
+                  {ledgerEntries.filter(e => e.transaction_type === 'sub_investment').length}
+                </p>
+              </div>
+
+              <div className="bg-redhill-gray p-6 rounded-2xl border border-white/[0.06] shadow-lg">
+                <div className="w-12 h-12 bg-blue-500/10 text-blue-400 rounded-xl flex items-center justify-center mb-4">
+                  <Building2 className="w-6 h-6" />
+                </div>
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Total Allotted Sqft Logged</p>
+                <p className="text-2xl font-bold text-white mt-1">
+                  {ledgerEntries.reduce((sum, e) => sum + (e.allotted_sqft || 0), 0).toLocaleString('en-IN')} <span className="text-sm font-normal text-gray-400">sqft</span>
+                </p>
+              </div>
+
+              <div className="bg-redhill-gray p-6 rounded-2xl border border-white/[0.06] shadow-lg">
+                <div className="w-12 h-12 bg-amber-500/10 text-amber-400 rounded-xl flex items-center justify-center mb-4">
+                  <Receipt className="w-6 h-6" />
+                </div>
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Ledger Transactions</p>
+                <p className="text-2xl font-bold text-white mt-1">{ledgerEntries.length}</p>
+              </div>
+            </div>
+
+            {/* Filter and Search Bar */}
+            <div className="bg-redhill-gray rounded-2xl border border-white/[0.06] p-6 space-y-4 shadow-lg">
+              <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
+                <div className="relative flex-1 w-full">
+                  <Search className="w-4 h-4 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={ledgerSearch}
+                    onChange={(e) => setLedgerSearch(e.target.value)}
+                    placeholder="Search by investor name, ID, project name, or notes..."
+                    className="w-full bg-white/[0.03] border border-white/[0.08] rounded-xl pl-11 pr-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:bg-white/[0.05] focus:border-redhill-red/40"
+                  />
+                  {ledgerSearch && (
+                    <button onClick={() => setLedgerSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                  <select
+                    value={ledgerProjectFilter}
+                    onChange={(e) => setLedgerProjectFilter(e.target.value)}
+                    className="bg-white/[0.03] border border-white/[0.08] text-gray-300 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-redhill-red/40"
+                  >
+                    <option value="all" className="bg-redhill-gray">All Projects</option>
+                    {projects.map(p => (
+                      <option key={p.id} value={p.id} className="bg-redhill-gray">{p.name}</option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={ledgerTypeFilter}
+                    onChange={(e) => setLedgerTypeFilter(e.target.value)}
+                    className="bg-white/[0.03] border border-white/[0.08] text-gray-300 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-redhill-red/40"
+                  >
+                    <option value="all" className="bg-redhill-gray">All Transaction Types</option>
+                    <option value="initial_assignment" className="bg-redhill-gray">Initial Assignment</option>
+                    <option value="sub_investment" className="bg-redhill-gray">Sub-Investment Upgrade</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Table */}
+              <div className="overflow-x-auto rounded-xl border border-white/[0.06]">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-black/20 border-b border-white/[0.06] text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                      <th className="px-5 py-3">Date</th>
+                      <th className="px-5 py-3">Investor</th>
+                      <th className="px-5 py-3">Project</th>
+                      <th className="px-5 py-3">Transaction Type</th>
+                      <th className="px-5 py-3">Added Amount</th>
+                      <th className="px-5 py-3">Added Sqft</th>
+                      <th className="px-5 py-3">Inv / Market Rate</th>
+                      <th className="px-5 py-3">Remarks / Note</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.05] text-sm">
+                    {ledgerEntries
+                      .filter(e => {
+                        const matchesSearch = !ledgerSearch || 
+                          (e.investor_name?.toLowerCase().includes(ledgerSearch.toLowerCase()) || false) ||
+                          (e.investor_login_id?.toLowerCase().includes(ledgerSearch.toLowerCase()) || false) ||
+                          (e.project_name?.toLowerCase().includes(ledgerSearch.toLowerCase()) || false) ||
+                          (e.note?.toLowerCase().includes(ledgerSearch.toLowerCase()) || false);
+
+                        const matchesProject = ledgerProjectFilter === 'all' || e.project_id === Number(ledgerProjectFilter);
+                        const matchesType = ledgerTypeFilter === 'all' || e.transaction_type === ledgerTypeFilter;
+
+                        return matchesSearch && matchesProject && matchesType;
+                      })
+                      .map((entry) => (
+                        <tr key={entry.id} className="hover:bg-white/[0.02] transition-colors">
+                          <td className="px-5 py-3.5 whitespace-nowrap">
+                            <p className="font-bold text-white text-xs">{formatDate(entry.transaction_date)}</p>
+                            <p className="text-[10px] text-gray-500">{formatRelativeTime(entry.created_at)}</p>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <p className="font-bold text-white">{entry.investor_name}</p>
+                            <p className="text-xs text-gray-400 font-mono">ID: {entry.investor_login_id || 'N/A'}</p>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <span className="font-medium text-gray-200">{entry.project_name}</span>
+                          </td>
+                          <td className="px-5 py-3.5 whitespace-nowrap">
+                            {entry.transaction_type === 'initial_assignment' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                Initial Assignment
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                <TrendingUp className="w-3 h-3" /> Sub-Investment
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3.5 whitespace-nowrap">
+                            <p className="font-bold text-emerald-400">+{formatCurrency(entry.investment_amount)}</p>
+                            {entry.contribution && <p className="text-[11px] text-gray-400">{entry.contribution}</p>}
+                          </td>
+                          <td className="px-5 py-3.5 whitespace-nowrap">
+                            <p className="font-bold text-white">+{entry.allotted_sqft?.toLocaleString('en-IN') || 0} sqft</p>
+                          </td>
+                          <td className="px-5 py-3.5 whitespace-nowrap text-xs">
+                            <p className="text-gray-300">Inv: {formatCurrency(entry.price_at_investment)}/sqft</p>
+                            <p className="text-emerald-400 font-medium">Mkt: {formatCurrency(entry.market_price_per_sqft)}/sqft</p>
+                          </td>
+                          <td className="px-5 py-3.5 max-w-xs">
+                            <p className="text-xs text-gray-300 truncate" title={entry.note}>{entry.note || 'No notes'}</p>
+                          </td>
+                        </tr>
+                      ))}
+                    {ledgerEntries.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="text-center py-12 text-gray-500">
+                          <BookOpen className="w-10 h-10 mx-auto mb-2 opacity-20" />
+                          <p className="text-sm font-bold">No ledger transactions found</p>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -2191,6 +2465,144 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
               <button type="submit" className="w-full py-3 bg-gradient-to-r from-emerald-500 to-emerald-700 text-white font-bold rounded-xl hover:shadow-lg hover:shadow-emerald-500/20 transition-all">
                 Save Record
               </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Upgrade / Sub-Investment Modal */}
+      {showSubInvestmentModal && targetAssignment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowSubInvestmentModal(false)} />
+          <div className="relative bg-redhill-gray border border-white/[0.08] rounded-2xl w-full max-w-lg p-8 shadow-2xl text-white">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h2 className="text-2xl font-bold text-white font-serif flex items-center gap-2">
+                  <TrendingUp className="w-6 h-6 text-emerald-400" />
+                  Upgrade / Add Sub-Investment
+                </h2>
+                <p className="text-sm text-gray-400 mt-1">
+                  Adding capital for <span className="font-bold text-white">{targetAssignment.investor_name}</span> in <span className="font-bold text-redhill-red">{targetAssignment.project_name}</span>
+                </p>
+              </div>
+              <button onClick={() => setShowSubInvestmentModal(false)} className="text-gray-400 hover:text-white p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Current Summary Box */}
+            <div className="bg-black/30 border border-white/[0.06] rounded-xl p-4 mb-6 grid grid-cols-2 gap-4 text-xs">
+              <div>
+                <p className="text-gray-400 uppercase font-bold text-[10px]">Current Total Investment</p>
+                <p className="text-base font-bold text-white mt-0.5">{formatCurrency(targetAssignment.investment_amount)}</p>
+              </div>
+              <div>
+                <p className="text-gray-400 uppercase font-bold text-[10px]">Current Allotted Sqft</p>
+                <p className="text-base font-bold text-white mt-0.5">{targetAssignment.allotted_sqft?.toLocaleString('en-IN') || 0} sqft</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSubInvestmentSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Additional Investment (₹)</label>
+                  <input
+                    type="number"
+                    value={subInvAmt}
+                    onChange={(e) => setSubInvAmt(e.target.value)}
+                    placeholder="e.g. 500000"
+                    required
+                    min="1"
+                    className="w-full px-4 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-xl outline-none text-white focus:bg-white/[0.05] focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/10 transition-all text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Additional Allotted Sqft</label>
+                  <input
+                    type="number"
+                    value={subSqft}
+                    onChange={(e) => setSubSqft(e.target.value)}
+                    placeholder="e.g. 100"
+                    required
+                    min="0"
+                    className="w-full px-4 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-xl outline-none text-white focus:bg-white/[0.05] focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/10 transition-all text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Rate at Sub-Inv (₹/sqft)</label>
+                  <input
+                    type="number"
+                    value={subPriceAtInv}
+                    onChange={(e) => setSubPriceAtInv(e.target.value)}
+                    placeholder="Rate"
+                    className="w-full px-4 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-xl outline-none text-white focus:bg-white/[0.05] focus:border-emerald-500/50 transition-all text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Market Rate (₹/sqft)</label>
+                  <input
+                    type="number"
+                    value={subMarketPrice}
+                    onChange={(e) => setSubMarketPrice(e.target.value)}
+                    placeholder="Market Rate"
+                    className="w-full px-4 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-xl outline-none text-white focus:bg-white/[0.05] focus:border-emerald-500/50 transition-all text-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Transaction Date</label>
+                <input
+                  type="date"
+                  value={subDate}
+                  onChange={(e) => setSubDate(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-xl outline-none text-white focus:bg-white/[0.05] focus:border-emerald-500/50 transition-all text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Ledger Note / Remarks</label>
+                <input
+                  type="text"
+                  value={subNote}
+                  onChange={(e) => setSubNote(e.target.value)}
+                  placeholder="e.g. Phase 2 Top-up Investment"
+                  className="w-full px-4 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-xl outline-none text-white focus:bg-white/[0.05] focus:border-emerald-500/50 transition-all text-sm"
+                />
+              </div>
+
+              <div className="pt-4 flex gap-4">
+                <button
+                  type="button"
+                  onClick={() => setShowSubInvestmentModal(false)}
+                  className="flex-1 py-3 font-bold text-gray-400 hover:bg-white/5 rounded-xl transition-all cursor-pointer text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingSubInv}
+                  className={cn(
+                    "flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-3 font-bold rounded-xl shadow-lg shadow-emerald-500/20 hover:from-emerald-500 hover:to-teal-500 transition-all cursor-pointer flex items-center justify-center gap-2 text-sm",
+                    submittingSubInv && "opacity-60 cursor-not-allowed"
+                  )}
+                >
+                  {submittingSubInv ? (
+                    <>
+                      <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                      Upgrading…
+                    </>
+                  ) : (
+                    <>
+                      <TrendingUp className="w-4 h-4" />
+                      Add to Ledger
+                    </>
+                  )}
+                </button>
+              </div>
             </form>
           </div>
         </div>

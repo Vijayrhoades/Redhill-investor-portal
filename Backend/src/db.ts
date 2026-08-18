@@ -151,4 +151,52 @@ if (!hasPriceAtInvestment) {
     }
 }
 
+// Initialize investment_ledger table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS investment_ledger (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    project_id INTEGER NOT NULL,
+    transaction_type TEXT CHECK(transaction_type IN ('initial_assignment', 'sub_investment', 'adjustment')) NOT NULL,
+    investment_amount REAL DEFAULT 0,
+    allotted_sqft REAL DEFAULT 0,
+    price_at_investment REAL DEFAULT 0,
+    market_price_per_sqft REAL DEFAULT 0,
+    contribution TEXT,
+    note TEXT,
+    transaction_date TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(user_id) REFERENCES users(id),
+    FOREIGN KEY(project_id) REFERENCES projects(id)
+  );
+`);
+
+// Backfill migration: Populate ledger for existing assignments if ledger is empty
+try {
+  const ledgerCount = (db.prepare('SELECT COUNT(*) as count FROM investment_ledger').get() as any)?.count || 0;
+  if (ledgerCount === 0) {
+    const existingAssignments = db.prepare('SELECT * FROM investor_projects').all() as any[];
+    for (const a of existingAssignments) {
+      db.prepare(`
+        INSERT INTO investment_ledger (
+          user_id, project_id, transaction_type, investment_amount, allotted_sqft,
+          price_at_investment, market_price_per_sqft, contribution, note, transaction_date
+        ) VALUES (?, ?, 'initial_assignment', ?, ?, ?, ?, ?, 'Initial assignment backfill', ?)
+      `).run(
+        a.user_id,
+        a.project_id,
+        a.investment_amount || 0,
+        a.allotted_sqft || 0,
+        a.price_at_investment || 0,
+        a.market_price_per_sqft || 0,
+        a.contribution || '',
+        a.investment_date || new Date().toISOString().split('T')[0]
+      );
+    }
+    console.log(`Migration: Backfilled ${existingAssignments.length} initial entries into investment_ledger.`);
+  }
+} catch (e) {
+  console.error('Migration for investment_ledger backfill failed:', e);
+}
+
 export default db;

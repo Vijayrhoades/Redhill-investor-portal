@@ -86,6 +86,19 @@ export const assignInvestor = (req: AuthRequest, res: Response) => {
     db.prepare('INSERT INTO investor_projects (user_id, project_id, contribution, investment_amount, allotted_sqft, market_price_per_sqft, price_at_investment, investment_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
       user_id, project_id, contribution, investment_amount || 0, allotted_sqft || 0, market_price_per_sqft || 0, price_at_investment || 0, investment_date || null
     );
+
+    // Automatically record initial assignment entry in investment_ledger
+    const txDate = investment_date || new Date().toISOString().split('T')[0];
+    db.prepare(`
+      INSERT INTO investment_ledger (
+        user_id, project_id, transaction_type, investment_amount, allotted_sqft,
+        price_at_investment, market_price_per_sqft, contribution, note, transaction_date
+      ) VALUES (?, ?, 'initial_assignment', ?, ?, ?, ?, ?, 'Initial project assignment', ?)
+    `).run(
+      user_id, project_id, investment_amount || 0, allotted_sqft || 0,
+      price_at_investment || 0, market_price_per_sqft || 0, contribution || '', txDate
+    );
+
     res.json({ message: 'Assigned successfully' });
   } catch (e: any) {
     res.status(400).json({ error: e.message });
@@ -102,6 +115,100 @@ export const updateAssignment = (req: AuthRequest, res: Response) => {
     res.json({ message: 'Updated successfully' });
   } catch (e: any) {
     res.status(400).json({ error: e.message });
+  }
+};
+
+// Add Sub-Investment / Upgrade Investment
+export const addSubInvestment = (req: AuthRequest, res: Response) => {
+  const { user_id, project_id, investment_amount, allotted_sqft, price_at_investment, market_price_per_sqft, contribution, note, transaction_date } = req.body;
+  
+  try {
+    const existing = db.prepare('SELECT * FROM investor_projects WHERE user_id = ? AND project_id = ?').get(user_id, project_id) as any;
+    if (!existing) {
+      return res.status(404).json({ error: 'Investor is not assigned to this project' });
+    }
+
+    const addedAmt = parseFloat(investment_amount) || 0;
+    const addedSqft = parseFloat(allotted_sqft) || 0;
+    const priceAtInv = parseFloat(price_at_investment) || existing.price_at_investment || 0;
+    const marketPrice = parseFloat(market_price_per_sqft) || existing.market_price_per_sqft || 0;
+    const txDate = transaction_date || new Date().toISOString().split('T')[0];
+    const txNote = note || 'Sub-investment addition / upgrade';
+
+    const newTotalAmt = (existing.investment_amount || 0) + addedAmt;
+    const newTotalSqft = (existing.allotted_sqft || 0) + addedSqft;
+
+    const formatCrLakh = (val: number) => {
+      if (val >= 10000000) return `₹${(val / 10000000).toFixed(2)} Cr`;
+      if (val >= 100000) return `₹${(val / 100000).toFixed(2)} Lakh`;
+      return `₹${val.toLocaleString('en-IN')}`;
+    };
+
+    const updatedContribution = contribution || formatCrLakh(newTotalAmt);
+
+    // Update main assignment record with cumulative totals
+    db.prepare(`
+      UPDATE investor_projects
+      SET investment_amount = ?,
+          allotted_sqft = ?,
+          price_at_investment = ?,
+          market_price_per_sqft = ?,
+          contribution = ?
+      WHERE user_id = ? AND project_id = ?
+    `).run(newTotalAmt, newTotalSqft, priceAtInv, marketPrice, updatedContribution, user_id, project_id);
+
+    // Insert into ledger audit log
+    const ledgerResult = db.prepare(`
+      INSERT INTO investment_ledger (
+        user_id, project_id, transaction_type, investment_amount, allotted_sqft,
+        price_at_investment, market_price_per_sqft, contribution, note, transaction_date
+      ) VALUES (?, ?, 'sub_investment', ?, ?, ?, ?, ?, ?, ?)
+    `).run(user_id, project_id, addedAmt, addedSqft, priceAtInv, marketPrice, updatedContribution, txNote, txDate);
+
+    res.json({
+      message: 'Sub-investment added and logged to ledger successfully',
+      ledger_id: ledgerResult.lastInsertRowid,
+      new_total_amount: newTotalAmt,
+      new_total_sqft: newTotalSqft
+    });
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
+};
+
+// Fetch Investment Ledger
+export const getLedger = (req: AuthRequest, res: Response) => {
+  try {
+    const { userId, projectId, search } = req.query;
+    let queryStr = `
+      SELECT il.*, u.name as investor_name, u.email as investor_email, u.login_id as investor_login_id, p.name as project_name
+      FROM investment_ledger il
+      JOIN users u ON il.user_id = u.id
+      JOIN projects p ON il.project_id = p.id
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+
+    if (userId) {
+      queryStr += ` AND il.user_id = ?`;
+      params.push(userId);
+    }
+    if (projectId) {
+      queryStr += ` AND il.project_id = ?`;
+      params.push(projectId);
+    }
+    if (search) {
+      queryStr += ` AND (u.name LIKE ? OR u.email LIKE ? OR u.login_id LIKE ? OR p.name LIKE ? OR il.note LIKE ?)`;
+      const term = `%${search}%`;
+      params.push(term, term, term, term, term);
+    }
+
+    queryStr += ` ORDER BY il.created_at DESC, il.id DESC`;
+
+    const ledgerEntries = db.prepare(queryStr).all(...params);
+    res.json(ledgerEntries);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 };
 

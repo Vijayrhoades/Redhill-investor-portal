@@ -10,6 +10,8 @@ import {
   updateCctv,
   assignInvestor,
   updateAssignment,
+  addSubInvestment,
+  getLedger,
   getAssignments,
   getMilestones,
   createMilestone,
@@ -46,6 +48,10 @@ router.patch('/admin/projects/:id/cctv', authenticateToken, isAdmin, updateCctv)
 router.post('/admin/assign', authenticateToken, isAdmin, assignInvestor);
 router.patch('/admin/investor-project/:userId/:projectId', authenticateToken, isAdmin, updateAssignment);
 router.get('/admin/investor-projects', authenticateToken, isAdmin, getAssignments);
+
+// Investment Ledger & Sub-investments
+router.get('/admin/ledger', authenticateToken, isAdmin, getLedger);
+router.post('/admin/ledger/sub-investment', authenticateToken, isAdmin, addSubInvestment);
 
 // Milestones
 router.get('/admin/projects/:id/milestones', authenticateToken, isAdmin, getMilestones);
