@@ -98,56 +98,58 @@ export const sendMilestoneCompletedNotification = async (
 
   const notifiedRecipients: { id: number; name: string; email: string }[] = [];
 
-  // 2. Dispatch personalized branded emails to each investor
-  for (const investor of investors) {
-    const subject = `🎉 Milestone Completed: ${milestoneName} — ${projectName}`;
-    const html = generateMilestoneCompletedHtml({
-      investorName: investor.name,
-      projectName,
-      projectLocation,
-      projectImageUrl,
-      projectId,
-      milestoneName,
-      milestoneCategory,
-      completionDate,
-      dayNumber,
-      targetDays,
-      notes,
-    });
-
-    const isSent = await sendEmail({
-      to: investor.email,
-      subject,
-      html,
-    });
-
-    // 3. Log notification in database for audit and transparency
-    try {
-      db.prepare(`
-        INSERT INTO notifications (
-          project_id, milestone_id, user_id, recipient_email, recipient_name, subject, type, content_html, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
+  // 2. Dispatch personalized branded emails to each investor concurrently
+  await Promise.all(
+    investors.map(async (investor) => {
+      const subject = `🎉 Milestone Completed: ${milestoneName} — ${projectName}`;
+      const html = generateMilestoneCompletedHtml({
+        investorName: investor.name,
+        projectName,
+        projectLocation,
+        projectImageUrl,
         projectId,
-        milestoneId,
-        investor.id,
-        investor.email,
-        investor.name,
-        subject,
-        'milestone_completed',
-        html,
-        isSent ? 'sent' : 'failed'
-      );
-
-      notifiedRecipients.push({
-        id: investor.id,
-        name: investor.name,
-        email: investor.email,
+        milestoneName,
+        milestoneCategory,
+        completionDate,
+        dayNumber,
+        targetDays,
+        notes,
       });
-    } catch (logErr) {
-      console.error(`Error logging notification for investor ${investor.id}:`, logErr);
-    }
-  }
+
+      const isSent = await sendEmail({
+        to: investor.email,
+        subject,
+        html,
+      });
+
+      // 3. Log notification in database for audit and transparency
+      try {
+        db.prepare(`
+          INSERT INTO notifications (
+            project_id, milestone_id, user_id, recipient_email, recipient_name, subject, type, content_html, status
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          projectId,
+          milestoneId,
+          investor.id,
+          investor.email,
+          investor.name,
+          subject,
+          'milestone_completed',
+          html,
+          isSent ? 'sent' : 'failed'
+        );
+
+        notifiedRecipients.push({
+          id: investor.id,
+          name: investor.name,
+          email: investor.email,
+        });
+      } catch (logErr) {
+        console.error(`Error logging notification for investor ${investor.id}:`, logErr);
+      }
+    })
+  );
 
   // 4. Create an announcement on the project feed so investors see it in portal
   let announcementCreated = false;

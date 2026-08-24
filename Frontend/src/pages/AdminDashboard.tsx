@@ -395,7 +395,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
       setAssignInvestmentAmt('');
       setAssignSqft('');
       setAssignMarketPrice('');
-      fetchAssignments();
+      refetchAssignments();
       showToast('Investor assigned to project successfully!', 'success');
     } else {
       const data = await res.json();
@@ -649,8 +649,8 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
             headers: { 'Content-Type': 'application/json' }
           });
           if (res.ok) {
-            setInvestors(prev => prev.filter(i => i.id !== id));
-            fetchAssignments();
+            refetchInvestors();
+            refetchAssignments();
             showToast(`${name} has been deleted successfully.`, 'success');
           } else {
             const data = await res.json();
@@ -737,7 +737,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
     if (res.ok) {
       setShowEditInvestmentModal(false);
       setEditingAssignment(null);
-      fetchAssignments();
+      refetchAssignments();
       showToast('Investment details updated successfully!', 'success');
     } else {
       const data = await res.json();

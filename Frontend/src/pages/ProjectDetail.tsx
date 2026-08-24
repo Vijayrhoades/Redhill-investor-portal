@@ -208,7 +208,7 @@ export default function ProjectDetail({ user, onLogout }: ProjectDetailProps) {
                 {updates.length > 0 && (
                   <div className="flex items-center gap-2 text-sm">
                     <Clock className="w-4 h-4 text-emerald-400" />
-                    Last Updated: {formatDate(updates[updates.length - 1].created_at)}
+                    Last Updated: {formatDate(updates[updates.length - 1].date)}
                   </div>
                 )}
               </div>
