@@ -1,4 +1,4 @@
-export type Role = 'super_admin' | 'site_manager' | 'support_agent' | 'admin' | 'investor';
+export type Role = 'super_admin' | 'senior_admin' | 'site_manager' | 'support_agent' | 'financial_officer' | 'marketing_manager' | 'admin' | 'investor';
 
 export interface User {
   id: number;
@@ -74,6 +74,10 @@ export interface Query {
   created_at: string;
   userName?: string;
   projectName?: string;
+  investor_name?: string;
+  investor_email?: string;
+  project_name?: string;
+  last_sender_role?: string;
 }
 
 export interface NotificationLog {

@@ -228,9 +228,9 @@ export default function InvestorDashboard({ user, onLogout }: InvestorDashboardP
               <TrendingUp className="w-5 h-5 text-emerald-400" />
               Investment Growth
             </h3>
-            <div className="h-[300px] w-full">
-              <div className="overflow-x-auto w-full">
-                <BarChart width={900} height={300} data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <div className="h-[300px] w-full min-w-0">
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
                   <XAxis 
                     dataKey="name" 
@@ -256,7 +256,7 @@ export default function InvestorDashboard({ user, onLogout }: InvestorDashboardP
                   <Bar dataKey="Investment" fill="#e11d48" radius={[4, 4, 0, 0]} maxBarSize={40} />
                   <Bar dataKey="Value" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
                 </BarChart>
-              </div>
+              </ResponsiveContainer>
             </div>
           </motion.div>
         )}

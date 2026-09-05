@@ -9,8 +9,11 @@ interface LoginProps {
 }
 
 const demoAccounts = [
-  { role: 'Admin', email: 'admin@redhillinfra.com', password: 'admin123' },
-  { role: 'Investor', email: 'investor@example.com', password: 'investor123' },
+  { role: 'Super Admin', email: 'admin@redhillinfra.com', password: 'admin123', badgeColor: 'bg-amber-500/15 text-amber-400' },
+  { role: 'Site Engineer', email: 'sitemanager@redhillinfra.com', password: 'site123', badgeColor: 'bg-emerald-500/15 text-emerald-400' },
+  { role: 'Financial Officer', email: 'finance@redhillinfra.com', password: 'finance123', badgeColor: 'bg-purple-500/15 text-purple-400' },
+  { role: 'Support Agent', email: 'support@redhillinfra.com', password: 'support123', badgeColor: 'bg-blue-500/15 text-blue-400' },
+  { role: 'Investor', email: 'investor@example.com', password: 'investor123', badgeColor: 'bg-redhill-red/15 text-redhill-red' },
 ];
 
 export default function Login({ onLogin }: LoginProps) {
@@ -237,7 +240,7 @@ export default function Login({ onLogin }: LoginProps) {
                         className="w-full flex items-center justify-between px-4 py-2.5 bg-white/[0.03] border border-white/[0.06] rounded-xl hover:bg-white/[0.06] transition-all cursor-pointer group"
                       >
                         <div className="flex items-center gap-3">
-                          <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md ${account.role === 'Admin' ? 'bg-redhill-red/15 text-redhill-red' : 'bg-blue-500/15 text-blue-400'}`}>
+                          <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md ${account.badgeColor}`}>
                             {account.role}
                           </span>
                           <span className="text-xs text-gray-400 font-medium">{account.email}</span>

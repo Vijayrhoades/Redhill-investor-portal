@@ -47,7 +47,7 @@ export default function App() {
         <Routes>
           <Route 
             path="/login" 
-            element={user ? <Navigate to={['super_admin', 'site_manager', 'support_agent', 'admin'].includes(user.role) ? '/admin' : '/dashboard'} /> : <Login onLogin={setUser} />} 
+            element={user ? <Navigate to={user.role === 'investor' ? '/dashboard' : '/admin'} /> : <Login onLogin={setUser} />} 
           />
           
           <Route 
@@ -62,7 +62,7 @@ export default function App() {
 
           <Route 
             path="/admin" 
-            element={user && ['super_admin', 'site_manager', 'support_agent', 'admin'].includes(user.role) ? <AdminDashboard user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} 
+            element={user && user.role !== 'investor' ? <AdminDashboard user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} 
           />
 
           <Route path="/" element={<Navigate to="/login" />} />

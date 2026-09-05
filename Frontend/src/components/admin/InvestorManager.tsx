@@ -96,8 +96,8 @@ export default function InvestorManager() {
         />
       ) : (
         <div className="bg-redhill-gray rounded-2xl border border-white/[0.06] shadow-lg overflow-hidden">
-          <div className="max-h-[500px] overflow-y-auto">
-            <table className="w-full text-left">
+          <div className="max-h-[500px] overflow-y-auto overflow-x-auto">
+            <table className="w-full text-left min-w-[800px]">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-[#252A35] border-b border-white/[0.06]">
                   <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Investor</th>

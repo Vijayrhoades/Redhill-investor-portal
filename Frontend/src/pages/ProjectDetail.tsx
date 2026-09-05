@@ -3,9 +3,9 @@ import { useParams, Link } from 'react-router-dom';
 import {
   Building2, MapPin, Calendar, CheckCircle2, Clock, AlertCircle,
   FileText, Image as ImageIcon, Video, Bell, ChevronLeft,
-  Download, ExternalLink, LogOut, MessageCircle, Send, ChevronUp, ChevronRight, IndianRupee
+  Download, ExternalLink, LogOut, MessageCircle, Send, ChevronUp, ChevronRight, IndianRupee, Sparkles
 } from 'lucide-react';
-import { User, Project, Milestone, ProgressUpdate, Announcement, Query } from '../types';
+import { User, Project, Milestone, ProgressUpdate, Announcement, Query, LedgerEntry } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -13,7 +13,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Layout from '../components/Layout';
 import Skeleton from '../components/Skeleton';
 import StatusChip from '../components/StatusChip';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import { formatCurrency, formatDate, formatRelativeTime } from '../utils/formatters';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -53,6 +53,16 @@ export default function ProjectDetail({ user, onLogout }: ProjectDetailProps) {
     queryFn: async () => {
       const res = await fetch(`/api/investor/payments/${id}`);
       if (!res.ok) throw new Error('Failed to fetch payments');
+      return res.json();
+    },
+    enabled: !!id,
+  });
+
+  const { data: ledgerEntries = [] } = useQuery<LedgerEntry[]>({
+    queryKey: ['investor-ledger', id],
+    queryFn: async () => {
+      const res = await fetch(`/api/investor/ledger/${id}`);
+      if (!res.ok) throw new Error('Failed to fetch ledger');
       return res.json();
     },
     enabled: !!id,
@@ -208,7 +218,7 @@ export default function ProjectDetail({ user, onLogout }: ProjectDetailProps) {
                 {updates.length > 0 && (
                   <div className="flex items-center gap-2 text-sm">
                     <Clock className="w-4 h-4 text-emerald-400" />
-                    Last Updated: {formatDate(updates[updates.length - 1].date)}
+                    Last Updated: {formatDate(updates[0].date)}
                   </div>
                 )}
               </div>
@@ -288,31 +298,32 @@ export default function ProjectDetail({ user, onLogout }: ProjectDetailProps) {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="bg-[#121217]/90 backdrop-blur-md border-b border-white/[0.05] sticky top-20 z-20">
+      <div className="bg-[#121217]/90 backdrop-blur-md border-b border-white/[0.05] sticky top-0 md:top-20 z-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex gap-8">
+          <div className="flex gap-1 sm:gap-4 lg:gap-8 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
             {[
-              { id: 'progress', label: 'Project Progress', icon: Clock, count: milestones.length },
-              { id: 'docs', label: 'Documents & Approvals', icon: FileText, count: docMilestones.length + approvalMilestones.length },
-              { id: 'ledger', label: 'Ledger & Invoices', icon: IndianRupee, count: payments.length },
-              { id: 'media', label: 'Media Feed', icon: ImageIcon, count: updates.length },
-              { id: 'queries', label: 'Queries & Help', icon: MessageCircle, count: queries.length },
+              { id: 'progress', label: 'Progress', labelFull: 'Project Progress', icon: Clock, count: milestones.length },
+              { id: 'docs', label: 'Documents', labelFull: 'Documents & Approvals', icon: FileText, count: docMilestones.length + approvalMilestones.length },
+              { id: 'ledger', label: 'Ledger', labelFull: 'Investment Ledger', icon: IndianRupee, count: ledgerEntries.length },
+              { id: 'media', label: 'Media', labelFull: 'Media Feed', icon: ImageIcon, count: updates.length },
+              { id: 'queries', label: 'Queries', labelFull: 'Queries & Help', icon: MessageCircle, count: queries.length },
             ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
                 className={cn(
-                  "flex items-center gap-2 py-5 border-b-2 transition-all font-bold text-sm cursor-pointer",
+                  "flex items-center gap-1.5 sm:gap-2 py-4 sm:py-5 border-b-2 transition-all font-bold text-xs sm:text-sm cursor-pointer whitespace-nowrap shrink-0",
                   activeTab === tab.id
                     ? "border-redhill-red text-redhill-red"
                     : "border-transparent text-gray-400 hover:text-white"
                 )}
               >
-                <tab.icon className="w-4 h-4" />
-                {tab.label}
+                <tab.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">{tab.labelFull}</span>
+                <span className="sm:hidden">{tab.label}</span>
                 {tab.count > 0 && (
                   <span className={cn(
-                    "ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold",
+                    "ml-0.5 sm:ml-1.5 px-1 sm:px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold",
                     activeTab === tab.id
                       ? "bg-redhill-red/20 text-redhill-red"
                       : "bg-white/10 text-gray-400"
@@ -591,16 +602,20 @@ export default function ProjectDetail({ user, onLogout }: ProjectDetailProps) {
                       transition={{ delay: idx * 0.05 }}
                       className="group bg-redhill-gray rounded-2xl overflow-hidden border border-white/[0.06] shadow-lg hover:border-white/[0.12] transition-all"
                     >
-                      <div className="relative aspect-video overflow-hidden bg-white/[0.02]">
+                      <div className="relative aspect-video overflow-hidden bg-black/40">
                         {update.type === 'video' ? (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Video className="w-12 h-12 text-white/20" />
-                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                              <div className="w-12 h-12 bg-redhill-red rounded-full flex items-center justify-center text-white">
-                                <Video className="w-6 h-6" />
-                              </div>
+                          update.url ? (
+                            <video
+                              src={update.url}
+                              controls
+                              preload="metadata"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Video className="w-12 h-12 text-white/20" />
                             </div>
-                          </div>
+                          )
                         ) : (
                           <img
                             src={update.url || 'https://picsum.photos/seed/update/1920/1080'}
@@ -634,69 +649,121 @@ export default function ProjectDetail({ user, onLogout }: ProjectDetailProps) {
               exit={{ opacity: 0, y: -10 }}
               className="max-w-4xl mx-auto h-[600px] flex flex-col bg-redhill-gray rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden"
             >
-              <div className="p-6 border-b border-white/[0.06] bg-black/20 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-redhill-red to-amber-600 rounded-full flex items-center justify-center text-white shrink-0 shadow-lg shadow-redhill-red/20">
+              {/* Support Desk Header */}
+              <div className="p-5 sm:p-6 border-b border-white/[0.08] bg-[#1A1D27] flex items-center justify-between">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-11 h-11 bg-gradient-to-br from-redhill-red to-red-700 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg shadow-redhill-red/20 border border-white/10">
                     <MessageCircle className="w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="font-bold text-white text-sm font-serif">Redhill Support desk</h2>
-                    <p className="text-xs text-emerald-400 font-bold flex items-center gap-1.5 mt-0.5">
-                      <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
-                      Active Thread
+                    <div className="flex items-center gap-2">
+                      <h2 className="font-bold text-white text-base font-serif">Redhill Executive Support Desk</h2>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                        <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
+                        Online & Active
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Direct inquiries for {project.name} &bull; Typical reply within a few hours
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-redhill-dark/40">
-                {queries.length > 0 ? queries.map((q) => (
-                  <div
-                    key={q.id}
-                    className={cn(
-                      "flex flex-col w-full",
-                      q.sender_role === 'investor' ? "items-end" : "items-start"
-                    )}
-                  >
-                    <div className={cn(
-                      "px-4.5 py-3 max-w-[80%] text-sm shadow-lg leading-relaxed transition-all duration-300",
-                      q.sender_role === 'investor'
-                        ? "bg-redhill-red text-white rounded-2xl rounded-tr-none shadow-redhill-red/10"
-                        : "bg-[#1E1E28] text-gray-200 border border-white/[0.06] rounded-2xl rounded-tl-none"
-                    )}>
-                      {q.message}
+              {/* Chat Message Stream */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-gradient-to-b from-[#10121A] to-[#141620] min-h-[420px] max-h-[550px]">
+                {queries.length > 0 ? queries.map((q) => {
+                  const isInvestor = q.sender_role === 'investor';
+                  return (
+                    <div
+                      key={q.id}
+                      className={cn(
+                        "flex flex-col w-full group",
+                        isInvestor ? "items-end" : "items-start"
+                      )}
+                    >
+                      {/* Sender Info Tag */}
+                      <div className={cn(
+                        "flex items-center gap-2 mb-1 px-1",
+                        isInvestor ? "flex-row-reverse" : "flex-row"
+                      )}>
+                        <span className={cn(
+                          "text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border shadow-sm",
+                          isInvestor
+                            ? "bg-white/10 text-gray-300 border-white/15"
+                            : "bg-redhill-red/20 text-red-300 border-red-500/30"
+                        )}>
+                          {isInvestor ? 'You (Investor)' : 'Redhill Support'}
+                        </span>
+                        <span className="text-[10px] text-gray-400 font-mono">
+                          {formatRelativeTime(q.created_at)}
+                        </span>
+                      </div>
+
+                      {/* Message Bubble */}
+                      <div className={cn(
+                        "p-4 max-w-[85%] sm:max-w-[75%] text-sm leading-relaxed shadow-xl break-words whitespace-pre-wrap transition-all",
+                        isInvestor
+                          ? "bg-gradient-to-br from-redhill-red to-[#B7151A] text-white rounded-3xl rounded-tr-none shadow-redhill-red/15 border border-red-500/30"
+                          : "bg-[#202534] text-gray-100 border border-white/[0.08] rounded-3xl rounded-tl-none shadow-black/40"
+                      )}>
+                        <p className="text-[13px] sm:text-sm font-normal text-white">{q.message}</p>
+                      </div>
                     </div>
-                    <span className="text-[9px] text-gray-500 mt-1.5 font-bold uppercase tracking-wider mx-1">
-                      {q.sender_role === 'investor' ? 'You' : 'Redhill Support'} • {new Date(q.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                )) : (
-                  <div className="h-full flex flex-col items-center justify-center text-center p-10">
-                    <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4">
-                      <MessageCircle className="w-8 h-8 text-gray-600" />
+                  );
+                }) : (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-12">
+                    <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center mb-4 border border-white/10">
+                      <MessageCircle className="w-8 h-8 text-gray-400" />
                     </div>
-                    <h3 className="font-bold text-white mb-1 font-serif">No queries yet</h3>
-                    <p className="text-sm text-gray-500">Ask any questions about the project development or allotment here.</p>
+                    <h3 className="font-bold text-white text-base mb-1 font-serif">No inquiries posted yet</h3>
+                    <p className="text-xs text-gray-400 max-w-sm">Have a question regarding construction progress, payment receipts, or allotment details? Submit a query below.</p>
                   </div>
                 )}
                 <div ref={chatEndRef} />
               </div>
 
-              <form onSubmit={handleSendMessage} className="p-4 bg-black/40 border-t border-white/[0.06] flex gap-3">
+              {/* Quick Inquiry Chips */}
+              <div className="px-4 py-2 bg-[#171A24] border-t border-white/[0.06] flex items-center gap-2 overflow-x-auto pb-2">
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest shrink-0 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-amber-400" />
+                  Suggestions:
+                </span>
+                {[
+                  "Can I get an update on current milestone progress?",
+                  "Where can I find the latest payment receipts?",
+                  "Is the live CCTV feed active on site today?"
+                ].map((text, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setNewMessage(text)}
+                    className="px-3 py-1 bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.08] rounded-lg text-xs text-gray-300 hover:text-white whitespace-nowrap transition-all cursor-pointer text-left"
+                  >
+                    {text}
+                  </button>
+                ))}
+              </div>
+
+              {/* Input Form */}
+              <form onSubmit={handleSendMessage} className="p-4 bg-[#151722] border-t border-white/[0.08] flex items-center gap-3">
                 <input
                   type="text"
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
-                  placeholder="Type your question here..."
-                  className="flex-1 bg-white/[0.03] border border-white/[0.08] rounded-xl px-4 py-3.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:bg-white/[0.05] focus:border-redhill-red/40 focus:ring-2 focus:ring-redhill-red/10 transition-all"
+                  placeholder="Ask a question regarding this project..."
+                  className="flex-1 bg-white/[0.04] border border-white/[0.1] rounded-2xl px-5 py-3.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:bg-white/[0.06] focus:border-redhill-red/50 focus:ring-2 focus:ring-redhill-red/20 transition-all"
                   disabled={sending}
                 />
                 <button
                   type="submit"
                   disabled={sending || !newMessage.trim()}
-                  className="bg-redhill-red text-white p-3.5 rounded-xl hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-red-600/20 cursor-pointer"
+                  className="bg-gradient-to-r from-redhill-red to-red-700 hover:from-red-600 hover:to-red-800 disabled:opacity-40 disabled:cursor-not-allowed text-white px-6 py-3.5 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-redhill-red/20 cursor-pointer shrink-0"
                 >
                   <Send className="w-4 h-4" />
+                  <span className="hidden sm:inline">
+                    {sending ? 'Sending...' : 'Send'}
+                  </span>
                 </button>
               </form>
             </motion.div>
@@ -708,59 +775,71 @@ export default function ProjectDetail({ user, onLogout }: ProjectDetailProps) {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="max-w-4xl mx-auto"
+              className="max-w-4xl mx-auto space-y-6"
             >
-              <div className="bg-redhill-gray rounded-2xl border border-white/5 overflow-hidden">
-                <div className="p-6 border-b border-white/5 bg-black/20 flex items-center justify-between">
-                  <h3 className="font-bold text-white flex items-center gap-2">
+              {/* Investment Ledger Section */}
+              <div className="bg-redhill-gray rounded-2xl border border-white/[0.06] overflow-hidden">
+                <div className="p-4 sm:p-6 border-b border-white/[0.06] bg-[#1A1D27] flex items-center justify-between">
+                  <h3 className="font-bold text-white flex items-center gap-2 text-sm sm:text-base">
                     <IndianRupee className="w-5 h-5 text-redhill-red" />
-                    Payment Ledger
+                    Investment Ledger
                   </h3>
+                  <span className="text-[10px] font-bold text-gray-400 px-2 py-0.5 bg-white/10 rounded">{ledgerEntries.length} entries</span>
                 </div>
-                <div className="divide-y divide-white/5">
-                  {payments.length === 0 ? (
-                    <div className="p-12 text-center text-gray-500">
-                      <IndianRupee className="w-12 h-12 text-gray-700 mx-auto mb-4" />
-                      <p>No payments or invoices recorded yet.</p>
+                <div className="divide-y divide-white/[0.04]">
+                  {ledgerEntries.length === 0 ? (
+                    <div className="p-8 sm:p-12 text-center">
+                      <div className="w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center mx-auto mb-3 border border-white/10">
+                        <IndianRupee className="w-7 h-7 text-gray-400" />
+                      </div>
+                      <p className="text-sm text-gray-400 font-bold">No investment transactions recorded yet.</p>
+                      <p className="text-xs text-gray-500 mt-1">Your investment history will appear here once assigned.</p>
                     </div>
                   ) : (
-                    payments.map((payment: any) => (
-                      <div key={payment.id} className="p-6 flex items-start justify-between hover:bg-white/[0.02] transition-colors">
-                        <div className="flex gap-4">
-                          <div className={cn(
-                            "w-12 h-12 rounded-xl flex items-center justify-center shrink-0",
-                            payment.type === 'invoice' ? "bg-amber-500/10 text-amber-500" : "bg-emerald-500/10 text-emerald-500"
-                          )}>
-                            {payment.type === 'invoice' ? <FileText className="w-6 h-6" /> : <IndianRupee className="w-6 h-6" />}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-3 mb-1">
-                              <h4 className="font-bold text-white capitalize">{payment.type}</h4>
-                              <StatusChip status={payment.status === 'paid' ? 'completed' : 'pending'} />
+                    ledgerEntries.map((entry: LedgerEntry) => (
+                      <div key={entry.id} className="p-4 sm:p-5 hover:bg-white/[0.02] transition-colors">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                          <div className="flex gap-3 sm:gap-4 min-w-0">
+                            <div className={cn(
+                              "w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center shrink-0",
+                              entry.transaction_type === 'initial_assignment'
+                                ? "bg-blue-500/10 text-blue-400"
+                                : "bg-emerald-500/10 text-emerald-400"
+                            )}>
+                              <IndianRupee className="w-5 h-5" />
                             </div>
-                            <p className="text-sm text-gray-400 max-w-md">{payment.description}</p>
-                            <p className="text-xs text-gray-500 mt-2">{formatDate(payment.date)}</p>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2 mb-1">
+                                <span className={cn(
+                                  "px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border",
+                                  entry.transaction_type === 'initial_assignment'
+                                    ? "bg-blue-500/15 text-blue-300 border-blue-500/30"
+                                    : "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                                )}>
+                                  {entry.transaction_type === 'initial_assignment' ? 'Initial Assignment' : 'Sub Investment'}
+                                </span>
+                              </div>
+                              {entry.note && <p className="text-xs sm:text-sm text-gray-300 truncate">{entry.note}</p>}
+                              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-[10px] sm:text-xs text-gray-500">
+                                <span>Amount: <span className="text-white font-bold">{formatCurrency(entry.investment_amount)}</span></span>
+                                <span>Area: <span className="text-white font-bold">{entry.allotted_sqft?.toLocaleString('en-IN')} sqft</span></span>
+                                {entry.price_at_investment > 0 && (
+                                  <span>Rate: <span className="text-white font-bold">₹{entry.price_at_investment?.toLocaleString('en-IN')}/sqft</span></span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-gray-500 mt-1">{formatDate(entry.transaction_date || entry.created_at)}</p>
+                            </div>
                           </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xl font-bold text-white">{formatCurrency(payment.amount)}</p>
-                          {payment.file_url && (
-                            <a 
-                              href={payment.file_url} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 mt-2 text-xs font-bold text-redhill-red hover:text-red-400 transition-colors"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              Download {payment.type === 'invoice' ? 'Invoice' : 'Receipt'}
-                            </a>
-                          )}
+                          <div className="text-left sm:text-right shrink-0 pl-13 sm:pl-0">
+                            <p className="text-base sm:text-lg font-bold text-white">{formatCurrency(entry.investment_amount)}</p>
+                          </div>
                         </div>
                       </div>
                     ))
                   )}
                 </div>
               </div>
+
             </motion.div>
           )}
         </AnimatePresence>
