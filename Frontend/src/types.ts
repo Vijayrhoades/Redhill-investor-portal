@@ -112,3 +112,23 @@ export interface ProjectWithAudience {
   }[];
   totalInvestors: number;
 }
+
+export interface LedgerEntry {
+  id: number;
+  project_id: number;
+  project_name?: string;
+  user_id?: number;
+  investor_id?: number;
+  investor_name?: string;
+  investor_login_id?: string;
+  transaction_type: 'initial_assignment' | 'sub_investment' | 'adjustment' | string;
+  investment_amount: number;
+  contribution?: string;
+  allotted_sqft?: number;
+  price_at_investment: number;
+  market_price_per_sqft?: number;
+  note?: string;
+  transaction_date?: string;
+  created_at?: string;
+}
+

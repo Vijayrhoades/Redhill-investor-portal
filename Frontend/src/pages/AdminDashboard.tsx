@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { User, Project, Milestone, MilestoneCategory, MilestoneStatus, ProgressUpdate, Query, Role } from '../types';
+import { User, Project, Milestone, MilestoneCategory, MilestoneStatus, ProgressUpdate, Query, Role, LedgerEntry } from '../types';
 import {
   Users, Building2, LayoutDashboard, CheckCircle2, Clock, AlertCircle,
   Image as ImageIcon, Video, Bell, Save, Trash2, UserPlus, MapPin,
   MessageCircle, Send, ArrowLeft, Pencil, Copy, Check, ExternalLink, Eye, EyeOff,
   Search, MoreHorizontal, ChevronDown, ChevronUp, Wallet, MoreVertical, Hammer,
-  Upload, Link as LinkIcon, X, FileVideo, IndianRupee, Shield, Mail
+  Upload, Link as LinkIcon, X, FileVideo, IndianRupee, Shield, Mail, BookOpen,
+  PlusCircle, TrendingUp
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';

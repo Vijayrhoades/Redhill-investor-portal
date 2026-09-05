@@ -184,7 +184,7 @@ export default function AdminQueries() {
   const handleComposeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!composeUserId || !composeProjectId || !composeMsgText.trim()) {
-      showToast('Please fill out all fields', 'warning');
+      showToast('Please fill out all fields', 'error');
       return;
     }
     composeMutation.mutate({
